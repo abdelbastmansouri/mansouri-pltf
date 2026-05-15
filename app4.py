@@ -67,23 +67,45 @@ def admin_space(df_students, df_reports):
 def student_space(df_students):
     st.markdown("<h2 style='text-align: center;'>📝 فضاء التلميذ</h2>", unsafe_allow_html=True)
     
+    # تنظيف أسماء الأعمدة من المسافات الزائدة لضمان المطابقة
+    df_students.columns = df_students.columns.str.strip()
+    
+    # التأكد من وجود الأعمدة المطلوبة أو بدائلها
+    col_class = 'القسم' if 'القسم' in df_students.columns else None
+    col_name = 'إسم التلميذ' if 'إسم التلميذ' in df_students.columns else ('اسم التلميذ' if 'اسم التلميذ' in df_students.columns else None)
+    col_id = 'رقم التلميذ' if 'رقم التلميذ' in df_students.columns else None
+
+    if not col_class or not col_name or not col_id:
+        st.error(f"⚠️ خطأ في أسماء أعمدة ملف الإكسيل. الأعمدة الحالية هي: {df_students.columns.tolist()}")
+        st.info("يرجى التأكد من تسمية الأعمدة بـ: رقم التلميذ، إسم التلميذ، القسم")
+        return
+
     if 'student_auth' not in st.session_state:
         # تسجيل الدخول
         with st.container():
             c1, c2 = st.columns(2)
-            sel_class = c1.selectbox("القسم:", ["---"] + df_students['القسم'].unique().tolist())
-            names = df_students[df_students['القسم'] == sel_class]['اسم التلميذ'].tolist() if sel_class != "---" else []
+            sel_class = c1.selectbox("القسم:", ["---"] + df_students[col_class].unique().tolist())
+            
+            names = df_students[df_students[col_class] == sel_class][col_name].tolist() if sel_class != "---" else []
             sel_name = c2.selectbox("الاسم:", ["---"] + names)
             pwd = st.text_input("رقم مسار (القن السري):", type="password")
             
             if st.button("دخول"):
-                real_pwd = df_students[df_students['اسم التلميذ'] == sel_name]['رقم التلميذ'].values[0]
-                if str(pwd).strip() == str(real_pwd).strip():
-                    st.session_state.student_auth = True
-                    st.session_state.user = {"name": sel_name, "class": sel_class}
-                    st.rerun()
+                if sel_name != "---":
+                    real_pwd = df_students[df_students[col_name] == sel_name][col_id].values[0]
+                    if str(pwd).strip().upper() == str(real_pwd).strip().upper():
+                        st.session_state.student_auth = True
+                        st.session_state.user = {"name": sel_name, "class": sel_class}
+                        st.rerun()
+                    else:
+                        st.error("❌ القن السري غير صحيح")
                 else:
-                    st.error("❌ القن السري غير صحيح")
+                    st.warning("المرجو اختيار الاسم أولاً")
+    else:
+        # فضاء الرفع (كما هو سابقاً)
+        st.success(f"مرحباً {st.session_state.user['name']} | قسم: {st.session_state.user['class']}")
+        # ... بقية كود الرفع الخاص بالدروس ...
+           
     else:
         # فضاء الرفع
         st.success(f"مرحباً {st.session_state.user['name']} | قسم: {st.session_state.user['class']}")
