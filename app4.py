@@ -149,3 +149,26 @@ elif menu == "🔑 فضاء الأستاذ":
         admin_space(df_students, df_reports)
     else:
         st.sidebar.warning("يرجى إدخال كلمة سر الأستاذ")
+        # --- القائمة الجانبية (Sidebar) ---
+with st.sidebar:
+    st.title("🛡️ بوابة الأستاذ المنصوري")
+    
+    # 1. التحقق إذا كان هناك شخص مسجل الدخول
+    if st.session_state.get('auth', False):
+        # عرض اسم المستخدم (تلميذ أو أستاذ)
+        user_display = st.session_state.get('user', {}).get('name', 'الأستاذ')
+        st.success(f"✅ متصل الآن: {user_display}")
+        
+        # زر تسجيل الخروج الذي طلبته
+        if st.button("🚪 تسجيل الخروج"):
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.rerun() # يعيد التلميذ لواجهة تسجيل الدخول فوراً
+            
+        st.divider() # خط فاصل
+    
+    # 2. أزرار التنقل الرئيسية (تظهر فقط عند عدم وجود تسجيل دخول)
+    if not st.session_state.get('auth', False):
+        st.info("الرجاء اختيار الفضاء المطلوب:")
+        role_choice = st.radio("انتقل إلى:", ["🏠 فضاء التلميذ", "👨‍🏫 فضاء الأستاذ"])
+        st.session_state.role = "student" if role_choice == "🏠 فضاء التلميذ" else "admin"
