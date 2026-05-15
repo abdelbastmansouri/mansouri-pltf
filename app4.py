@@ -168,7 +168,7 @@ with st.sidebar:
         st.divider() # خط فاصل
     
     # 2. أزرار التنقل الرئيسية (تظهر فقط عند عدم وجود تسجيل دخول)
-    if not st.session_state.get('auth', False):
-        st.info("الرجاء اختيار الفضاء المطلوب:")
-        role_choice = st.radio("انتقل إلى:", ["🏠 فضاء التلميذ", "👨‍🏫 فضاء الأستاذ"])
-        st.session_state.role = "student" if role_choice == "🏠 فضاء التلميذ" else "admin"
+#    if not st.session_state.get('auth', False):
+      #  st.info("الرجاء اختيار الفضاء المطلوب:")
+     #   role_choice = st.radio("انتقل إلى:", ["🏠 فضاء التلميذ", "👨‍🏫 فضاء الأستاذ"])
+      #  st.session_state.role = "student" if role_choice == "🏠 فضاء التلميذ" else "admin"
