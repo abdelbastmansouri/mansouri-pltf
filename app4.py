@@ -101,7 +101,7 @@ def student_space(df_students):
                         st.error("❌ القن السري غير صحيح")
                 else:
                     st.warning("المرجو اختيار الاسم أولاً")
-    else:
+
         # فضاء الرفع (كما هو سابقاً)
         st.success(f"مرحباً {st.session_state.user['name']} | قسم: {st.session_state.user['class']}")
         # ... بقية كود الرفع الخاص بالدروس ...
