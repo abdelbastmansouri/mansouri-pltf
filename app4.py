@@ -117,7 +117,6 @@ def get_lesson_ref(lesson_name, df_lessons):
 
 # --- 2. بناء القائمة الجانبية (Sidebar) بهوية الوزارة الرقمية ---
 with st.sidebar:
-    # إضافة شعار معبر يتناسب مع روح التعليم المغربي والرياضة
     st.markdown("""
         <div style='text-align: center; padding: 10px;'>
             <img src='https://img.icons8.com/color/120/000000/education.png' style='border-radius: 50%; background: white; padding: 10px; width: 80px;'/>
@@ -148,7 +147,6 @@ with st.sidebar:
 
 # --- 3. واجهة الأستاذ الاحترافية والمبيانات الجميلة ---
 def admin_space(df_students, df_reports, df_lessons):
-    # ترويسة علوية فاخرة للموقع تشبه البوابات الرسمية للوزارة
     st.markdown("""
         <div style='background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); padding: 30px; border-radius: 15px; margin-bottom: 25px; color: white;'>
             <h1 style='color: #ffffff !important; margin: 0; font-size: 2rem;'>👨‍🏫 الفضاء الرقمي للتدقيق الإداري والتربوي</h1>
@@ -160,7 +158,6 @@ def admin_space(df_students, df_reports, df_lessons):
     
     with tab1:
         st.markdown("### 📈 المؤشرات التربوية العامة")
-        # تصميم بطاقات إحصائية جميلة مخصصة بالـ CSS المضاف في الأعلى
         col1, col2, col3 = st.columns(3)
         with col1:
             st.markdown(f"<div class='metric-card'><p style='color:#64748b; font-weight:bold;'>إجمالي التلاميذ المسجلين</p><h2 style='margin:0; color:#1e3a8a;'>👥 {len(df_students)}</h2></div>", unsafe_allow_html=True)
@@ -172,7 +169,6 @@ def admin_space(df_students, df_reports, df_lessons):
         st.markdown("<br>", unsafe_allow_html=True)
         
         if not df_reports.empty:
-            # تخصيص ألوان المبيان لتطابق ألوان الوزارة (الأزرق الملكي والذهبي)
             fig = px.bar(
                 df_reports.groupby('القسم').size().reset_index(name='عدد الإرسالات'), 
                 x='القسم', 
@@ -246,9 +242,8 @@ def admin_space(df_students, df_reports, df_lessons):
         if st.button("تصفير سجل التقارير (حذف الكل)"):
             st.warning("يرجى حذف الصفوف يدوياً من ملف Google Sheets حالياً لضمان الأمان الفائق للملفات.")
 
-# --- 4. واجهة التلميذ الاحترافية مع صور الخلفية ومكافحة الغش ---
+# --- 4. واجهة التلميذ الاحترافية مع تصحيح المتغير بالكامل ---
 def student_space(df_students, df_lessons):
-    # بنر ترحيبي فاخر للتلاميذ يتضمن عناصر وصور تعبيرية تمثل مدرسة النجاح والشباب المغربي
     st.markdown("""
         <div style='background: linear-gradient(135deg, #10b981 0%, #1e3a8a 100%); padding: 35px; border-radius: 15px; margin-bottom: 25px; color: white; text-align: center; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);'>
             <h2 style='color: #ffffff !important; margin: 0; font-size: 2.2rem; font-weight: bold;'>🇲🇦 الفضاء الرقمي للتلميذات والتلاميذ</h2>
@@ -291,10 +286,9 @@ def student_space(df_students, df_lessons):
                     st.warning("المرجو تعبئة كافة الحقول المطلوبة لتوثيق الهوية.")
                     
     else:
-        # واجهة رفع الملفات والدروس للتلميذ بعد نجاح التحقق
         st.success(f"🏫 مرحباً بك: {st.session_state.user['name']} | القسم الفعلي: {st.session_state.user['class']}")
         
-        lesson_tabs = st.tabs(["📘 المجزوءة / الدرس 1", "📗 المجزوءة / الدرس 2", " orange📙 المجزوءة / الدرس 3"])
+        lesson_tabs = st.tabs(["📘 المجزوءة / الدرس 1", "📗 المجزوءة / الدرس 2", "📙 المجزوءة / الدرس 3"])
         
         for i, tab in enumerate(lesson_tabs):
             with tab:
@@ -310,7 +304,6 @@ def student_space(df_students, df_lessons):
                             
                             saved_lesson_reference = get_lesson_ref(l_name, df_lessons)
                             
-                            # بناء برومبت التفتيش والتدقيق التربوي المتقدم
                             prompt_instructions = f"""
                             أنت مساعد أستاذ رياضيات عبقري ومراقب صارم جداً مكلف بكشف الغش والنسخ وتدقيق الدفاتر. 
                             التلميذ {st.session_state.user['name']} (القسم: {st.session_state.user['class']}) أرسل صور دفتره لدرس ({l_name}).
@@ -328,10 +321,10 @@ def student_space(df_students, df_lessons):
                             2. **التدقيق عنواناً بعنوان وفقرة بفقرة:**
                                - تتبع الصور المرسلة ورقة بورقة وعنواناً بعنوان بناءً على المرجع الأساسي المكتوب أعلاه. تأكد من أن التلميذ نقل جميع العناوين والتعاريف والخاصيات الرياضية (Propriétés) والرموز والمصطلحات المقررة في الدرس.
 
-                            3. **تدقيق حلول التمارين التطبيقية والتصحيح كاملة:**
+                            3. **تدقيق حلول التمارين التطبيقية وتصحيحها كاملة:**
                                - تحقق من وجود كل تمرين تطبيقي أو مثال (Exemples / Applications) ورد في المرجع أعلاه.
-                               - بما أن مرجع الأستاذ يحتوي على نص التمارين التطبيقية فقط دون حلول جاهزة، يجب عليك (بصفتك خبيراً رياضياً) أن تقوم أولاً بحل التمرين ذهنياً خطوة بخطوة، ثم تتأكد بدقة أن التلميذ قد كتب "التصحيح والحل كاملاً ومقنعاً وبصيغة رياضية صحيحة" داخل الدفتر بخط يده. إذا قام بنقل نص التمرين فقط دون إدراج حله المتكامل، فاعتبر الفقرة ناقصة.
-
+                               - بما أن مرجع الأستاذ يحتوي على نص التمارين التطبيقية فقط دون حلول جاهزة، يجب عليك (بصفتك خبيراً رياضياً) أن تقوم أولاً بحل التمرين ذهنياً خطوة بخطوة، ثم تتأكد بدقة أن التلميذ قد كتب "التصحيح والحل كاملاً ومقنعاً وبصيغة رياضية صحيحة" داخل الدفتر بخط يده. إذا قام بنقل نص التمرين فقط دون إدراج حله المتكامل, فاعتبر الفقرة ناقصة.
+                            
                             أعط تقريراً منظماً وبليغاً باللغة العربية كالتالي:
                             - 🚨 **حالة الأمان ومكافحة الغش:** (تقرير صريح وحازم حول أصلية الدفتر وعدم تكراره)
                             - 📊 **نسبة اكتمال الدرس الإجمالية:** (من 100%)
@@ -340,11 +333,12 @@ def student_space(df_students, df_lessons):
                             - 🎨 **ملاحظة التنظيم والترتيب الهيكلي للدفتر:** (تقييم الخط واستعمال الألوان المناسبة للوضوح والترتيب)
                             """
                             
-                            model = genai.GenerativeModel("gemini-2.5-flash")
+                            model = genai.GenerativeModel("gemini-1.5-flash")
                             imgs = [Image.open(f) for f in up_files]
-                            res = model.generate_content([prompt_instructions, *images])
                             
-                            # حفظ البيانات والتقرير في ورقة السجلات لملف Google Sheets
+                            # تم إصلاح الخطأ البرمجي هنا لتمرير المتغيّر الصحيح imgs
+                            res = model.generate_content([prompt_instructions, *imgs])
+                            
                             client = get_gspread_client()
                             sh = client.open("les classes").worksheet("Reports")
                             sh.append_row([datetime.now().strftime("%Y-%m-%d"), st.session_state.user['name'], st.session_state.user['class'], l_name, res.text, "تم التدقيق بنجاح"])
