@@ -89,13 +89,13 @@ def get_gcp_credentials():
 def get_gspread_client():
     return gspread.authorize(get_gcp_credentials())
 
-# دالة مطورة ومستقرة لرفع الملفات داخل مجلدك المشترك مع نقل الملكية لتفادي خطأ المساحة 403
+# دالة مطورة ومستقرة لرفع الملفات داخل مجلدك وتفادي خطأ مساحة الـ Service Account (403)
 def upload_pdf_to_drive(file_name, file_bytes):
     try:
         creds = get_gcp_credentials()
         drive_service = build('drive', 'v3', credentials=creds)
         
-        # الـ ID النظيف الخاص بمجلدك المشترك الجديد
+        # الـ ID الخاص بمجلدك الجديد في حسابك الفعلي
         SHARED_FOLDER_ID = "1SwrvnMPTYLPSiV4B3Lyr6TiDCpurx_24"
         
         file_metadata = {
@@ -107,12 +107,12 @@ def upload_pdf_to_drive(file_name, file_bytes):
         fh = io.BytesIO(file_bytes)
         media = MediaIoBaseUpload(fh, mimetype='application/pdf', chunksize=1024*1024, resumable=True)
         
-        # إضافة supportsAllDrives=True ليتجاوز الروبوت قيود مساحته الصفرية في المجلدات المشتركة
+        # 🌟 التعديل الأساسي: إرسال الطلب مع دعم محركات الأقراص المشتركة والمجلدات الجماعية
         request = drive_service.files().create(
             body=file_metadata,
             media_body=media,
-            fields='id, webViewLink',
-            supportsAllDrives=True  
+            fields='id, webViewLink, owners',
+            supportsAllDrives=True  # تجاوز قيود الحساب البرمجي
         )
         
         response = None
@@ -121,7 +121,7 @@ def upload_pdf_to_drive(file_name, file_bytes):
             
         file_id = response.get('id')
         
-        # منح صلاحية القراءة لكل من يملك الرابط
+        # 🌟 منح صلاحية القراءة العامة للملف ليتمكن النظام من قراءته وعرضه
         user_permission = {'type': 'anyone', 'role': 'reader'}
         drive_service.permissions().create(
             fileId=file_id, 
