@@ -19,77 +19,55 @@ st.set_page_config(
 )
 
 # تصميم وتنسيقات CSS المتقدمة: دمج الزخرفة المغربية والتدرج الانسيابي والشفافية
-# كود التنسيق المطور لإدراج الخلفية المغربية الذهبية والزرقاء في جميع الواجهات
-st.markdown("""
-    <style>
-    /* تطبيق الصورة كخلفية كاملة لجميع واجهات الموقع */
-    .stApp { 
-        background-image: linear-gradient(to bottom, rgba(248, 250, 252, 0.7) 0%, rgba(248, 250, 252, 0.5) 100%), 
-                          url('https://images.unsplash.com/photo-1590075865003-e48277afd55d?q=80&w=1000&auto=format&fit=crop') !important;
-        background-size: cover !important;
-        background-repeat: no-repeat !important;
-        background-attachment: fixed !important;
-        background-position: center !important;
-    }
-    
-    /* تنسيق القائمة الجانبية لتتناسب مع ألوان الخلفية الجديدة */
-    [data-testid="stSidebar"] { 
-        background-color: rgba(26, 54, 93, 0.96) !important; /* أزرق ملكي داكن مستوحى من زخرفة الصورة */
-        color: white; 
-    }
-    [data-testid="stSidebar"] * { color: white !important; }
-    
-    /* بطاقات الإحصائيات مع تأثير زجاجي شفاف ومؤطر بالذهبي لتبدو الخلفية واضحة من ورائها */
-    .metric-card {
-        background-color: rgba(255, 255, 255, 0.9) !important;
-        backdrop-filter: blur(10px) !important;
-        -webkit-backdrop-filter: blur(10px) !important;
-        border-top: 5px solid #d4af37 !important; /* اللون الذهبي الملكي */
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
-        text-align: center;
-        border-left: 1px solid rgba(212, 175, 55, 0.3);
-        border-right: 1px solid rgba(212, 175, 55, 0.3);
-    }
-    
-    /* الواجهات الداخلية وعلامات التبويب (Tabs) بتأثير زجاجي أنيق */
-    .stTabs [data-baseweb="tab-panel"] {
-        background-color: rgba(255, 255, 255, 0.85) !important;
-        backdrop-filter: blur(8px) !important;
-        -webkit-backdrop-filter: blur(8px) !important;
-        padding: 25px;
-        border-radius: 12px;
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
-        margin-top: 15px;
-        border: 1px solid rgba(255, 255, 255, 0.6);
-    }
+import base64
 
-    /* العناوين الرئيسية بلون أزرق داكن متناسق */
-    h1, h2, h3 { 
-        color: #1a365d !important; 
-        font-family: 'Segoe UI', sans-serif; 
-        font-weight: bold; 
-    }
-    
-    /* أزرار تفاعلية باللون الأزرق الملكي وتتحول للذهبي عند تمرير الفأرة */
-    .stButton>button {
-        background-color: #1a365d !important; 
-        color: white !important;
-        border-radius: 8px !important; 
-        border: 1px solid #d4af37 !important;
-        padding: 10px 24px !important; 
-        font-weight: bold !important;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    .stButton>button:hover {
-        background-color: #d4af37 !important; /* يتحول للذهبي */
-        color: #1a365d !important;
-        box-shadow: 0 4px 14px rgba(212, 175, 55, 0.4) !important;
-        transform: translateY(-1px);
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# كود التنسيق الاحترافي مع دمج الخلفية المغربية الذهبية والزرقاء بشكل مدمج
+def add_bg_and_styles():
+    st.markdown("""
+        <style>
+        /* تطبيق الخلفية الزخرفية وتثبيتها ممتدة على كامل الشاشة */
+        .stApp { 
+            background: 
+                linear-gradient(to bottom, rgba(248, 250, 252, 0.75) 0%, rgba(248, 250, 252, 0.5) 100%),
+                url('https://images.unsplash.com/photo-1590075865003-e48277afd55d?q=80&w=1000&auto=format&fit=crop') !important;
+            background-size: cover !important;
+            background-repeat: no-repeat !important;
+            background-attachment: fixed !important;
+            background-position: center !important;
+        }
+        
+        /* تحسين مظهر القائمة الجانبية باللون الكحلي الملكي */
+        [data-testid="stSidebar"] { 
+            background-color: rgba(26, 54, 93, 0.98) !important; 
+        }
+        [data-testid="stSidebar"] * { color: white !important; }
+        
+        /* البطاقات التفاعلية وصناديق الاختيار بتأثير زجاجي أنيق (شفافية خلفية) */
+        .stSelectbox, .stTextInput, .metric-card {
+            background-color: rgba(255, 255, 255, 0.9) !important;
+            backdrop-filter: blur(8px) !important;
+            -webkit-backdrop-filter: blur(8px) !important;
+            border-radius: 10px !important;
+            border: 1px solid rgba(212, 175, 55, 0.3) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+        }
+        
+        /* جعل اللافتة العلوية الخضراء والزرقاء متناسقة ومنسجمة مع الخلفية */
+        div[data-testid="stMarkdownContainer"] > div {
+            border-radius: 12px !important;
+        }
+
+        /* العناوين والنصوص الرئيسية */
+        h1, h2, h3, label { 
+            color: #1a365d !important; 
+            font-family: 'Segoe UI', sans-serif !important; 
+            font-weight: bold !important; 
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+# استدعاء الدالة لتطبيق التنسيق فوراً
+add_bg_and_styles()
 
 # إعداد مفتاح Gemini
 genai.configure(api_key="AIzaSyAwhWzEseoWORwT8eBLWBNB57wkuFxaBeA")
