@@ -137,6 +137,7 @@ def upload_pdf_to_drive(file_name, file_bytes):
         return None
 
 # دالة قراءة البيانات مع ميزة التهدئة التلقائية لتفادي الحظر المتكرر لملف الإكسيل
+# دالة القراءة المحدثة والمطابقة لترتيب وعناوين ملفك الفعلي 100%
 def load_data():
     sh = None
     for attempt in range(4):
@@ -152,6 +153,48 @@ def load_data():
             
     if sh is None:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+    # 1. قراءة ورقة التلاميذ (Sheet1) بتنسيقها الجديد
+    try:
+        data_rows = sh.sheet1.get_all_values()
+        if data_rows and len(data_rows) > 1:
+            # تحويل البيانات إلى جدول مع تنظيف المسافات الزائدة من العناوين
+            headers = [h.strip() for h in data_rows[0]]
+            df_students = pd.DataFrame(data_rows[1:], columns=headers)
+            
+            # توحيد الأسماء برمجياً لتتوافق مع بقية الكود دون الحاجة لتعديل الإكسيل
+            if "إسم التلميذ" in df_students.columns:
+                df_students = df_students.rename(columns={"إسم التلميذ": "اسم التلميذ"})
+        else:
+            df_students = pd.DataFrame(columns=["رقم التلميذ", "اسم التلميذ", "تاريخ الإزدياد", "القسم"])
+    except Exception as e:
+        df_students = pd.DataFrame(columns=["رقم التلميذ", "اسم التلميذ", "تاريخ الإزدياد", "القسم"])
+
+    # 2. قراءة ورقة التقارير (Reports)
+    try:
+        reports_worksheet = sh.worksheet("Reports")
+        reports_rows = reports_worksheet.get_all_values()
+        if reports_rows and len(reports_rows) > 1:
+            reports_headers = [h.strip() for h in reports_rows[0]]
+            df_reports = pd.DataFrame(reports_rows[1:], columns=reports_headers)
+        else:
+            df_reports = pd.DataFrame(columns=["التاريخ", "الاسم", "القسم", "الدرس", "التقرير", "النسبة"])
+    except:
+        df_reports = pd.DataFrame(columns=["التاريخ", "الاسم", "القسم", "الدرس", "التقرير", "النسبة"])
+        
+    # 3. قراءة ورقة الدروس (Lessons)
+    try:
+        lessons_worksheet = sh.worksheet("Lessons")
+        lessons_rows = lessons_worksheet.get_all_values()
+        if lessons_rows and len(lessons_rows) > 1:
+            lessons_headers = [h.strip() for h in lessons_rows[0]]
+            df_lessons = pd.DataFrame(lessons_rows[1:], columns=lessons_headers)
+        else:
+            df_lessons = pd.DataFrame(columns=["الدرس", "الملاحظات_المرجعية", "تاريخ_التحديث"])
+    except:
+        df_lessons = pd.DataFrame(columns=["الدرس", "الملاحظات_المرجعية", "تاريخ_التحديث"])
+        
+    return df_students, df_reports, df_lessons
 
     # قراءة ورقة التلاميذ
     try:
