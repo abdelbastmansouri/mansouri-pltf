@@ -421,8 +421,8 @@ def student_space(df_students, df_lessons):
                     st.success("الملف المرجعي لهذا الدرس متاح ومحفوظ في السحاب بشكل دائم.")
                 
                 up_files = st.file_uploader(f"اختر صور صفحات الدفتر لـ {l_name}", accept_multiple_files=True, key=f"up_{l_name}", type=['jpg','jpeg','png'])
-
-if st.button(f"بدء المعالجة والتدقيق الفوري لـ {l_name}", key=f"btn_{l_name}"):
+                
+                if st.button(f"بدء المعالجة والتدقيق الفوري لـ {l_name}", key=f"btn_{l_name}"):
                     if up_files:
                         with st.spinner("🔄 جاري سحب المرجع التربوي السحابي الثابت وفحص الدفتر..."):
                             try:
