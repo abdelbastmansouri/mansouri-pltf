@@ -52,7 +52,7 @@ if 'auth' not in st.session_state: st.session_state.auth = False
 if 'user' not in st.session_state: st.session_state.user = {}
 if 'role' not in st.session_state: st.session_state.role = None
 
-# دالة الربط مع خدمات جوجل (Sheets + Drive)
+# دالة الربط مع خدمات جوجل
 def get_gcp_credentials():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     return Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
@@ -60,7 +60,7 @@ def get_gcp_credentials():
 def get_gspread_client():
     return gspread.authorize(get_gcp_credentials())
 
-# دالة مخصصة لرفع ملف الـ PDF إلى الـ Google Drive الخاص بك وجعله عاماً للقراءة
+# دالة رفع ملف الـ PDF إلى الـ Google Drive
 def upload_pdf_to_drive(file_name, file_bytes):
     try:
         creds = get_gcp_credentials()
@@ -74,7 +74,6 @@ def upload_pdf_to_drive(file_name, file_bytes):
         fh = io.BytesIO(file_bytes)
         media = MediaIoBaseUpload(fh, mimeType='application/pdf', resumable=True)
         
-        # رفع الملف
         uploaded_file = drive_service.files().create(
             body=file_metadata,
             media_body=media,
@@ -83,41 +82,55 @@ def upload_pdf_to_drive(file_name, file_bytes):
         
         file_id = uploaded_file.get('id')
         
-        # جعل الملف متاحاً لأي شخص لديه الرابط ليتمكن الـ AI والتلاميذ من قراءته
-        user_permission = {
-            'type': 'anyone',
-            'role': 'reader',
-        }
-        drive_service.permissions().create(
-            fileId=file_id,
-            body=user_permission
-        ).execute()
+        user_permission = {'type': 'anyone', 'role': 'reader'}
+        drive_service.permissions().create(fileId=file_id, body=user_permission).execute()
         
         return uploaded_file.get('webViewLink')
     except Exception as e:
         st.error(f"خطأ أثناء الرفع إلى Google Drive: {e}")
         return None
 
+# دالة محصنة ومحدثة لقراءة البيانات بأمان
 def load_data():
     client = get_gspread_client()
     sh = client.open("les classes")
-    df_students = pd.DataFrame(sh.sheet1.get_all_records())
     
+    # تحصين قراءة ورقة التلاميذ (sheet1) لتجنب أخطاء البنية والتنسيق
     try:
-        df_reports = pd.DataFrame(sh.worksheet("Reports").get_all_records())
+        data_rows = sh.sheet1.get_all_values()
+        if data_rows:
+            # نعتبر أول صف يحتوي على بيانات هو العناوين
+            df_students = pd.DataFrame(data_rows[1:], columns=data_rows[0])
+        else:
+            df_students = pd.DataFrame(columns=["القسم", "اسم التلميذ", "رقم التلميذ"])
+    except Exception as e:
+        st.error(f"تنبيه: تعذر قراءة ورقة التلاميذ بالأسلوب الافتراضي. تم تطبيق وضع الأمان المتقدم. الخلل: {e}")
+        df_students = pd.DataFrame(columns=["القسم", "اسم التلميذ", "رقم التلميذ"])
+
+    # قراءة تقارير التلاميذ
+    try:
+        reports_rows = sh.worksheet("Reports").get_all_values()
+        if reports_rows:
+            df_reports = pd.DataFrame(reports_rows[1:], columns=reports_rows[0])
+        else:
+            df_reports = pd.DataFrame(columns=["التاريخ", "الاسم", "القسم", "الدرس", "التقرير", "النسبة"])
     except:
         df_reports = pd.DataFrame(columns=["التاريخ", "الاسم", "القسم", "الدرس", "التقرير", "النسبة"])
         
+    # قراءة المراجع الثابتة من ورقة Lessons
     try:
-        ws_lessons = sh.worksheet("Lessons")
-        df_lessons = pd.DataFrame(ws_lessons.get_all_records())
+        lessons_rows = sh.worksheet("Lessons").get_all_values()
+        if lessons_rows:
+            df_lessons = pd.DataFrame(lessons_rows[1:], columns=lessons_rows[0])
+        else:
+            df_lessons = pd.DataFrame(columns=["الدرس", "الملاحظات_المرجعية", "تاريخ_التحديث"])
     except:
         ws_lessons = sh.add_worksheet(title="Lessons", rows="10", cols="3")
         ws_lessons.append_row(["الدرس", "الملاحظات_المرجعية", "تاريخ_التحديث"])
         ws_lessons.append_row(["الدرس 1", "لا توجد ملاحظات مرجعية حالياً", ""])
         ws_lessons.append_row(["الدرس 2", "لا توجد ملاحظات مرجعية حالياً", ""])
         ws_lessons.append_row(["الدرس 3", "لا توجد ملاحظات مرجعية حالياً", ""])
-        df_lessons = pd.DataFrame(ws_lessons.get_all_records())
+        df_lessons = pd.DataFrame(columns=["الدرس", "الملاحظات_المرجعية", "تاريخ_التحديث"])
         
     return df_students, df_reports, df_lessons
 
@@ -171,9 +184,11 @@ def admin_space(df_students, df_reports, df_lessons):
         col1, col2, col3 = st.columns(3)
         with col1: st.markdown(f"<div class='metric-card'><p style='color:#64748b; font-weight:bold;'>إجمالي التلاميذ</p><h2 style='margin:0; color:#1e3a8a;'>👥 {len(df_students)}</h2></div>", unsafe_allow_html=True)
         with col2: st.markdown(f"<div class='metric-card'><p style='color:#64748b; font-weight:bold;'>الدفاتر المدققة</p><h2 style='margin:0; color:#1e3a8a;'>📥 {len(df_reports)}</h2></div>", unsafe_allow_html=True)
-        with col3: st.markdown(f"<div class='metric-card'><p style='color:#64748b; font-weight:bold;'>الأقسام</p><h2 style='margin:0; color:#1e3a8a;'>🏫 {df_students['القسم'].nunique()}</h2></div>", unsafe_allow_html=True)
+        with col3: 
+            num_classes = df_students['القسم'].nunique() if 'القسم' in df_students.columns else 0
+            st.markdown(f"<div class='metric-card'><p style='color:#64748b; font-weight:bold;'>الأقسام</p><h2 style='margin:0; color:#1e3a8a;'>🏫 {num_classes}</h2></div>", unsafe_allow_html=True)
         
-        if not df_reports.empty:
+        if not df_reports.empty and 'القسم' in df_reports.columns:
             fig = px.bar(df_reports.groupby('القسم').size().reset_index(name='عدد الإرسالات'), x='القسم', y='عدد الإرسالات', title="📊 تفاعل الأقسام والالتزام بالدفاتر الرقمية", color_discrete_sequence=['#1e3a8a'])
             st.plotly_chart(fig, use_container_width=True)
 
@@ -184,9 +199,7 @@ def admin_space(df_students, df_reports, df_lessons):
         current_ref = get_lesson_ref(lesson_choice, df_lessons)
         st.info(f"📋 المرجع الحالي المحفوظ سحابياً للدرس:\n\n{current_ref}")
         
-        # أداة رفع الـ PDF المرجعي للأستاذ
-        uploaded_ref_file = st.file_uploader(f"📸 📤 ارفع ملف الدرس المرجعي الرسمي (يُفضل صيغة PDF للحفظ الدائم):", type=['pdf', 'jpg', 'jpeg', 'png'], key="admin_file_uploader")
-        
+        uploaded_ref_file = st.file_uploader(f"📸 📤 ارفع ملف الدرس المرجعي الرسمي (صيغة PDF للحفظ الدائم):", type=['pdf', 'jpg', 'jpeg', 'png'], key="admin_file_uploader")
         ref_note = st.text_area("أدخل عناصر الدرس الأساسية أو التوجيهات المكتوبة للذكاء الاصطناعي:", height=120, value=current_ref if "لا توجد ملاحظات" not in current_ref else "")
         
         col_btn1, col_btn2 = st.columns(2)
@@ -195,7 +208,6 @@ def admin_space(df_students, df_reports, df_lessons):
             with st.spinner("جاري رفع الملف إلى Google Drive وتأمين الرابط الدائم..."):
                 drive_link = ""
                 if uploaded_ref_file is not None:
-                    # قراءة محتوى الملف المرفوع كبايتات ورفعه فوراً للـ Drive
                     file_bytes = uploaded_ref_file.read()
                     drive_link = upload_pdf_to_drive(f"{lesson_choice}_{uploaded_ref_file.name}", file_bytes)
                 
@@ -203,7 +215,6 @@ def admin_space(df_students, df_reports, df_lessons):
                 sh = client.open("les classes")
                 ws_lessons = sh.worksheet("Lessons")
                 
-                # دمج الرابط الثابت من جوجل درايف مع النص والملاحظات حتى لا يضيع أبداً
                 if drive_link:
                     full_reference_text = f"{ref_note}\n\n🔗 رابط ملف الدرس المرجعي الثابت في Google Drive:\n{drive_link}"
                 else:
@@ -216,7 +227,7 @@ def admin_space(df_students, df_reports, df_lessons):
                 else:
                     ws_lessons.append_row([lesson_choice, full_reference_text, datetime.now().strftime("%Y-%m-%d %H:%M")])
                 
-                st.success(f"🎉 ممتاز يا أستاذ! تم رفع ملف الـ PDF إلى Google Drive بنجاح، وتم حفظ الرابط بشكل دائم في قاعدة البيانات سحابياً.")
+                st.success(f"🎉 ممتاز يا أستاذ! تم حفظ المرجع وربطه بالـ Drive بشكل أبدي وبدون اختفاء.")
                 st.rerun()
                 
         if col_btn2.button("🗑️ حذف ملف الدرس الحالي (تصفير المرجع)", use_container_width=True):
@@ -233,10 +244,14 @@ def admin_space(df_students, df_reports, df_lessons):
 
     with tab3:
         st.markdown("### 👥 تتبع السجل الأكاديمي للتلاميذ")
-        search_name = st.selectbox("اختر اسم التلميذ(ة):", df_students['اسم التلميذ'].unique() if 'اسم التلميذ' in df_students.columns else df_students.iloc[:,1].unique())
-        student_history = df_reports[df_reports['الاسم'] == search_name]
-        if not student_history.empty: st.dataframe(student_history, use_container_width=True)
-        else: st.info("لا توجد إرسالات مسجلة لهذا التلميذ حتى الآن.")
+        col_search = 'اسم التلميذ' if 'اسم التلميذ' in df_students.columns else (df_students.columns[1] if len(df_students.columns) > 1 else None)
+        if col_search:
+            search_name = st.selectbox("اختر اسم التلميذ(ة):", df_students[col_search].unique())
+            student_history = df_reports[df_reports['الاسم'] == search_name] if not df_reports.empty else pd.DataFrame()
+            if not student_history.empty: st.dataframe(student_history, use_container_width=True)
+            else: st.info("لا توجد إرسالات مسجلة لهذا التلميذ حتى الآن.")
+        else:
+            st.warning("جدول التلاميذ فارغ أو يحتوي على بنية غير صحيحة.")
 
     with tab4:
         st.markdown("### ⚙️ إعدادات الصيانة والأمان")
@@ -257,7 +272,7 @@ def student_space(df_students, df_lessons):
     col_id = 'رقم التلميذ' if 'رقم التلميذ' in df_students.columns else None
 
     if not col_class or not col_name or not col_id:
-        st.error(f"⚠️ خطأ في بنية الأعمدة بملف التلاميذ السحابي.")
+        st.error(f"⚠️ خطأ: لم يعثر النظام على الأعمدة المطلوبة (القسم، اسم التلميذ، رقم التلميذ) في ملف الإكسيل. يرجى مراجعة عناوين الأعمدة في السطر الأول لجدول التلاميذ.")
         return
 
     if not st.session_state.auth:
@@ -289,7 +304,6 @@ def student_space(df_students, df_lessons):
                 
                 saved_lesson_reference = get_lesson_ref(l_name, df_lessons)
                 
-                # إذا كان هناك رابط مسبق للـ PDF مرفوع من طرف الأستاذ، نعرضه للتلميذ للمراجعة والتحميل
                 if "🔗 رابط ملف الدرس المرجعي الثابت" in saved_lesson_reference:
                     st.markdown("### 📋 الملف المرجعي المعتمد من الأستاذ:")
                     st.success("الملف المرجعي لهذا الدرس متاح ومحفوظ في السحاب بشكل دائم.")
@@ -303,7 +317,7 @@ def student_space(df_students, df_lessons):
                             أنت مساعد أستاذ رياضيات عبقري ومراقب صارم جداً مكلف بكشف الغش والنسخ وتدقيق الدفاتر. 
                             التلميذ {st.session_state.user['name']} (القسم: {st.session_state.user['class']}) أرسل صور دفتره لدرس ({l_name}).
 
-                            المرجع الأساسي المعتمد لهذا الدرس والمرفوع من طرف الأستاذ (ويشمل الملاحظات ورابط ملف الـ PDF الأصلي الثابت للرجوع إليه) هو:
+                            المرجع الأساسي المعتمد لهذا الدرس والمرفوع من طرف الأستاذ هو:
                             \"\"\"{saved_lesson_reference}\"\"\"
 
                             المهام والقيود الإلزامية المطلوبة منك أثناء التدقيق والتفتيش (ركز بدقة عالية):
