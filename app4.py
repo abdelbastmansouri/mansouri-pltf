@@ -317,7 +317,7 @@ def student_space(df_students, df_lessons):
         # إدخال رقم مسار يدوياً لحماية الخصوصية
         input_massar = col_input1.text_input("أدخل رقم مسار الخاص بك (مثال: K123456):", help="اكتب الحرف كبيراً Capital").strip()
         # إدخال تاريخ الازدياد يدوياً
-        input_birth = col_input2.text_input("أدخل تاريخ ازديادك الموثق (صيغة: DD/MM/YYYY أو كما بالإكسيل):", placeholder="مثال: 15/08/2008").strip()
+        input_birth = col_input2.text_input("أدخل تاريخ ازديادك الموثق ( صيغة المطلوبة يوم ـ شهرـ سنة مثال: 2010-06-23 ):", placeholder="مثال: 15/08/2008").strip()
         
         if st.button("التحقق والولوج الآمن للمنصة 🚀", use_container_width=True):
             if sel_class != "---" and input_massar and input_birth:
