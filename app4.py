@@ -61,20 +61,19 @@ def get_gcp_credentials():
 def get_gspread_client():
     return gspread.authorize(get_gcp_credentials())
 
-# دالة مطورة ومحصنة لرفع الملفات الكبيرة (مثل ملف 2.7MB) بنظام الأجزاء تفادياً للانقطاع
-# دالة مطورة لرفع الملفات داخل مجلد مشترك لتفادي خطأ قلة المساحة (Quota)
+# دالة مطورة ومستقرة لرفع الملفات داخل مجلدك المشترك مباشرة عبر الـ ID الصحيح
 def upload_pdf_to_drive(file_name, file_bytes):
     try:
         creds = get_gcp_credentials()
         drive_service = build('drive', 'v3', credentials=creds)
         
-        # ⚠️ ضع هنا الـ ID الخاص بالمجلد الشخصي الذي أنشأته وشاركت معه الحساب الخدمي (جرب لصقه بين العلامتين "")
-        SHARED_FOLDER_ID = "https://drive.google.com/drive/folders/1spaiwyei-TgC18Mb6l34Kz4uJW-7O5Wz"
+        # هنا تم وضع الـ ID النظيف والـمُستخلص من رابط مجلدك مباشرة لتفادي خطأ الـ 404
+        SHARED_FOLDER_ID = "1spaiwyei-TgC18Mb6l34Kz4uJW-7O5Wz"
         
         file_metadata = {
             'name': file_name,
             'mimeType': 'application/pdf',
-            'parents': [SHARED_FOLDER_ID]  # إجبار الحساب الخدمي على الرفع داخل مساحتك الشخصية المستأجرة
+            'parents': [SHARED_FOLDER_ID]
         }
         
         fh = io.BytesIO(file_bytes)
@@ -92,16 +91,6 @@ def upload_pdf_to_drive(file_name, file_bytes):
             
         file_id = response.get('id')
         
-        # جعل الرابط متاحاً للقراءة لكل من يملكه لكي يفتحه التلاميذ والذكاء الاصطناعي
-        user_permission = {'type': 'anyone', 'role': 'reader'}
-        drive_service.permissions().create(fileId=file_id, body=user_permission).execute()
-        
-        return response.get('webViewLink')
-    except Exception as e:
-        st.error(f"❌ تعذر الرفع إلى Google Drive. تفاصيل العائق الإداري: {str(e)}")
-        return None
-        
-        # جعل الرابط متاحاً للقراءة لكل من يملكه لكي يفتحه التلاميذ والذكاء الاصطناعي
         user_permission = {'type': 'anyone', 'role': 'reader'}
         drive_service.permissions().create(fileId=file_id, body=user_permission).execute()
         
@@ -110,18 +99,23 @@ def upload_pdf_to_drive(file_name, file_bytes):
         st.error(f"❌ تعذر الرفع إلى Google Drive. تفاصيل العائق الإداري: {str(e)}")
         return None
 
-# دالة قراءة البيانات
+# دالة قراءة البيانات مع ميزة التهدئة التلقائية لتفادي الحظر المتكرر لملف الإكسيل
 def load_data():
-    for attempt in range(3):
+    sh = None
+    for attempt in range(4):
         try:
             client = get_gspread_client()
             sh = client.open("les classes")
             break
         except:
-            if attempt == 2:
+            if attempt == 3:
+                st.warning("🔄 هناك ضغط مؤقت في الاتصال مع خادم جوجل، يرجى الانتظار بضع ثوانٍ وإعادة التحديث.")
                 return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
-            time.sleep(2)
+            time.sleep(3)
             
+    if sh is None:
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
     # قراءة ورقة التلاميذ
     try:
         data_rows = sh.sheet1.get_all_values()
@@ -213,7 +207,7 @@ def admin_space(df_students, df_reports, df_lessons):
             st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
-        st.markdown("### 📂 centre d'administration")
+        st.markdown("### 📂 مركز إدارة المراجع السحابية")
         lesson_choice = st.selectbox("اختر الدرس المستهدف بالتحديث أو الإضافة:", ["الدرس 1", "الدرس 2", "الدرس 3"])
         
         current_ref = get_lesson_ref(lesson_choice, df_lessons)
@@ -225,7 +219,7 @@ def admin_space(df_students, df_reports, df_lessons):
         col_btn1, col_btn2 = st.columns(2)
         
         if col_btn1.button("💾 حفظ ونشر الدرس في المنصة بشكل دائم", use_container_width=True):
-            with st.spinner("جاري تأمين وحفظ الملف سحابياً في طلب واحد سريع..."):
+            with st.spinner("جاري تأمين وحفظ الملف سحابياً في المجلد المخصص..."):
                 drive_link = ""
                 if uploaded_ref_file is not None:
                     file_bytes = uploaded_ref_file.read()
@@ -236,62 +230,72 @@ def admin_space(df_students, df_reports, df_lessons):
                 else:
                     full_reference_text = ref_note
                 
-                client = get_gspread_client()
-                sh = client.open("les classes")
-                ws_lessons = sh.worksheet("Lessons")
-                
-                all_vals = ws_lessons.get_all_values()
-                if not all_vals:
-                    ws_lessons.append_row(["الدرس", "الملاحظات_المرجعية", "تاريخ_التحديث"])
-                    all_vals = [["الدرس", "الملاحظات_المرجعية", "تاريخ_التحديث"]]
-                
-                headers = all_vals[0]
-                rows = all_vals[1:]
-                
-                updated = False
-                for row in rows:
-                    if row and row[0] == lesson_choice:
-                        row[1] = full_reference_text
-                        row[2] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                        updated = True
+                # تحديث ورقة العمل في خطوة واحدة آمنة
+                for attempt in range(3):
+                    try:
+                        client = get_gspread_client()
+                        sh = client.open("les classes")
+                        ws_lessons = sh.worksheet("Lessons")
+                        
+                        all_vals = ws_lessons.get_all_values()
+                        if not all_vals:
+                            ws_lessons.append_row(["الدرس", "الملاحظات_المرجعية", "تاريخ_التحديث"])
+                            all_vals = [["الدرس", "الملاحظات_المرجعية", "تاريخ_التحديث"]]
+                        
+                        headers = all_vals[0]
+                        rows = all_vals[1:]
+                        
+                        updated = False
+                        for row in rows:
+                            if row and row[0] == lesson_choice:
+                                row[1] = full_reference_text
+                                row[2] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                                updated = True
+                                break
+                        
+                        if not updated:
+                            rows.append([lesson_choice, full_reference_text, datetime.now().strftime("%Y-%m-%d %H:%M")])
+                        
+                        ws_lessons.clear()
+                        ws_lessons.update([headers] + rows)
+                        st.success(f"🎉 تم الحفظ والنشر في حساب الـ Drive والإكسيل بسلام تام!")
                         break
-                
-                if not updated:
-                    rows.append([lesson_choice, full_reference_text, datetime.now().strftime("%Y-%m-%d %H:%M")])
-                
-                ws_lessons.clear()
-                ws_lessons.update([headers] + rows)
-                
-                st.success(f"🎉 تم الحفظ بنجاح تام وبطريقة محصنة وآمنة!")
+                    except Exception as ex:
+                        if attempt == 2:
+                            st.error(f"خطأ أثناء تحديث سجل المراجع في الإكسيل: {ex}")
+                        time.sleep(2)
                 st.rerun()
                 
         if col_btn2.button("🗑️ حذف ملف الدرس الحالي (تصفير المرجع)", use_container_width=True):
             with st.spinner("جاري إزالة المرجع..."):
-                client = get_gspread_client()
-                sh = client.open("les classes")
-                ws_lessons = sh.worksheet("Lessons")
-                
-                all_vals = ws_lessons.get_all_values()
-                if all_vals:
-                    headers = all_vals[0]
-                    rows = all_vals[1:]
-                    for row in rows:
-                        if row and row[0] == lesson_choice:
-                            row[1] = "لا توجد ملاحظات مرجعية حالياً"
-                            row[2] = ""
-                            break
-                    ws_lessons.clear()
-                    ws_lessons.update([headers] + rows)
-                st.success("تم حذف المرجع بنجاح.")
+                try:
+                    client = get_gspread_client()
+                    sh = client.open("les classes")
+                    ws_lessons = sh.worksheet("Lessons")
+                    
+                    all_vals = ws_lessons.get_all_values()
+                    if all_vals:
+                        headers = all_vals[0]
+                        rows = all_vals[1:]
+                        for row in rows:
+                            if row and row[0] == lesson_choice:
+                                row[1] = "لا توجد ملاحظات مرجعية حالياً"
+                                row[2] = ""
+                                break
+                        ws_lessons.clear()
+                        ws_lessons.update([headers] + rows)
+                    st.success("تم حذف المرجع بنجاح.")
+                except Exception as ex:
+                    st.error(f"عذراً، فشل الحذف: {ex}")
                 st.rerun()
 
     with tab3:
         st.markdown("### 👥 تتبع السجل الأكاديمي للتلاميذ")
         if not df_students.empty:
             col_search = 'اسم التلميذ' if 'اسم التلميذ' in df_students.columns else (df_students.columns[1] if len(df_students.columns) > 1 else None)
-            if col_search:
+            if col_search and col_search in df_students.columns:
                 search_name = st.selectbox("اختر اسم التلميذ(ة):", df_students[col_search].unique())
-                student_history = df_reports[df_reports['الاسم'] == search_name] if not df_reports.empty else pd.DataFrame()
+                student_history = df_reports[df_reports['الاسم'] == search_name] if not df_reports.empty and 'الاسم' in df_reports.columns else pd.DataFrame()
                 if not student_history.empty: st.dataframe(student_history, use_container_width=True)
                 else: st.info("لا توجد إرسالات مسجلة لهذا التلميذ حتى الآن.")
         else:
