@@ -60,7 +60,7 @@ def get_gcp_credentials():
 def get_gspread_client():
     return gspread.authorize(get_gcp_credentials())
 
-# دالة رفع ملف الـ PDF إلى الـ Google Drive
+# دالة رفع ملف الـ PDF إلى الـ Google Drive بعد إصلاح خطأ mimetype الإملائي
 def upload_pdf_to_drive(file_name, file_bytes):
     try:
         creds = get_gcp_credentials()
@@ -72,7 +72,8 @@ def upload_pdf_to_drive(file_name, file_bytes):
         }
         
         fh = io.BytesIO(file_bytes)
-        media = MediaIoBaseUpload(fh, mimeType='application/pdf', resumable=True)
+        # تم تصحيح المعامل هنا إلى lowercase (mimetype) ليتوافق مع مكتبة Google الرسمية
+        media = MediaIoBaseUpload(fh, mimetype='application/pdf', resumable=True)
         
         uploaded_file = drive_service.files().create(
             body=file_metadata,
@@ -90,21 +91,19 @@ def upload_pdf_to_drive(file_name, file_bytes):
         st.error(f"خطأ أثناء الرفع إلى Google Drive: {e}")
         return None
 
-# دالة محصنة ومحدثة لقراءة البيانات بأمان
+# دالة قراءة البيانات بأمان
 def load_data():
     client = get_gspread_client()
     sh = client.open("les classes")
     
-    # تحصين قراءة ورقة التلاميذ (sheet1) لتجنب أخطاء البنية والتنسيق
+    # قراءة ورقة التلاميذ
     try:
         data_rows = sh.sheet1.get_all_values()
         if data_rows:
-            # نعتبر أول صف يحتوي على بيانات هو العناوين
             df_students = pd.DataFrame(data_rows[1:], columns=data_rows[0])
         else:
             df_students = pd.DataFrame(columns=["القسم", "اسم التلميذ", "رقم التلميذ"])
     except Exception as e:
-        st.error(f"تنبيه: تعذر قراءة ورقة التلاميذ بالأسلوب الافتراضي. تم تطبيق وضع الأمان المتقدم. الخلل: {e}")
         df_students = pd.DataFrame(columns=["القسم", "اسم التلميذ", "رقم التلميذ"])
 
     # قراءة تقارير التلاميذ
@@ -125,11 +124,14 @@ def load_data():
         else:
             df_lessons = pd.DataFrame(columns=["الدرس", "الملاحظات_المرجعية", "تاريخ_التحديث"])
     except:
-        ws_lessons = sh.add_worksheet(title="Lessons", rows="10", cols="3")
-        ws_lessons.append_row(["الدرس", "الملاحظات_المرجعية", "تاريخ_التحديث"])
-        ws_lessons.append_row(["الدرس 1", "لا توجد ملاحظات مرجعية حالياً", ""])
-        ws_lessons.append_row(["الدرس 2", "لا توجد ملاحظات مرجعية حالياً", ""])
-        ws_lessons.append_row(["الدرس 3", "لا توجد ملاحظات مرجعية حالياً", ""])
+        try:
+            ws_lessons = sh.add_worksheet(title="Lessons", rows="10", cols="3")
+            ws_lessons.append_row(["الدرس", "الملاحظات_المرجعية", "تاريخ_التحديث"])
+            ws_lessons.append_row(["الدرس 1", "لا توجد ملاحظات مرجعية حالياً", ""])
+            ws_lessons.append_row(["الدرس 2", "لا توجد ملاحظات مرجعية حالياً", ""])
+            ws_lessons.append_row(["الدرس 3", "لا توجد ملاحظات مرجعية حالياً", ""])
+        except:
+            pass
         df_lessons = pd.DataFrame(columns=["الدرس", "الملاحظات_المرجعية", "تاريخ_التحديث"])
         
     return df_students, df_reports, df_lessons
@@ -220,14 +222,24 @@ def admin_space(df_students, df_reports, df_lessons):
                 else:
                     full_reference_text = ref_note
                 
-                cell = ws_lessons.find(lesson_choice)
-                if cell:
-                    ws_lessons.update_cell(cell.row, 2, full_reference_text)
-                    ws_lessons.update_cell(cell.row, 3, datetime.now().strftime("%Y-%m-%d %H:%M"))
-                else:
-                    ws_lessons.append_row([lesson_choice, full_reference_text, datetime.now().strftime("%Y-%m-%d %H:%M")])
+                # إستراتيجية بحث وتحديث محصنة بالكامل لتفادي خطأ find الحساسة
+                try:
+                    all_vals = ws_lessons.get_all_values()
+                    found_row = -1
+                    for idx, row in enumerate(all_vals):
+                        if row and row[0] == lesson_choice:
+                            found_row = idx + 1
+                            break
+                    
+                    if found_row != -1:
+                        ws_lessons.update_cell(found_row, 2, full_reference_text)
+                        ws_lessons.update_cell(found_row, 3, datetime.now().strftime("%Y-%m-%d %H:%M"))
+                    else:
+                        ws_lessons.append_row([lesson_choice, full_reference_text, datetime.now().strftime("%Y-%m-%d %H:%M")])
+                    st.success(f"🎉 ممتاز يا أستاذ! تم تثبيت ملف الـ PDF بنجاح في حساب الـ Drive الخاص بك، وحُفظ الرابط سحابياً دون أي اختفاء.")
+                except Exception as ex:
+                    st.error(f"خطأ أثناء تحديث الإكسيل: {ex}")
                 
-                st.success(f"🎉 ممتاز يا أستاذ! تم حفظ المرجع وربطه بالـ Drive بشكل أبدي وبدون اختفاء.")
                 st.rerun()
                 
         if col_btn2.button("🗑️ حذف ملف الدرس الحالي (تصفير المرجع)", use_container_width=True):
@@ -235,11 +247,20 @@ def admin_space(df_students, df_reports, df_lessons):
                 client = get_gspread_client()
                 sh = client.open("les classes")
                 ws_lessons = sh.worksheet("Lessons")
-                cell = ws_lessons.find(lesson_choice)
-                if cell:
-                    ws_lessons.update_cell(cell.row, 2, "لا توجد ملاحظات مرجعية حالياً")
-                    ws_lessons.update_cell(cell.row, 3, "")
-                st.success("تم حذف المرجع بنجاح.")
+                
+                try:
+                    all_vals = ws_lessons.get_all_values()
+                    found_row = -1
+                    for idx, row in enumerate(all_vals):
+                        if row and row[0] == lesson_choice:
+                            found_row = idx + 1
+                            break
+                    if found_row != -1:
+                        ws_lessons.update_cell(found_row, 2, "لا توجد ملاحظات مرجعية حالياً")
+                        ws_lessons.update_cell(found_row, 3, "")
+                    st.success("تم حذف المرجع بنجاح.")
+                except Exception as ex:
+                    st.error(f"عذراً، فشل الحذف: {ex}")
                 st.rerun()
 
     with tab3:
@@ -272,7 +293,7 @@ def student_space(df_students, df_lessons):
     col_id = 'رقم التلميذ' if 'رقم التلميذ' in df_students.columns else None
 
     if not col_class or not col_name or not col_id:
-        st.error(f"⚠️ خطأ: لم يعثر النظام على الأعمدة المطلوبة (القسم، اسم التلميذ، رقم التلميذ) في ملف الإكسيل. يرجى مراجعة عناوين الأعمدة في السطر الأول لجدول التلاميذ.")
+        st.error(f"⚠️ خطأ في بنية الملف السحابي. يرجى مراجعة العناوين.")
         return
 
     if not st.session_state.auth:
@@ -323,7 +344,7 @@ def student_space(df_students, df_lessons):
                             المهام والقيود الإلزامية المطلوبة منك أثناء التدقيق والتفتيش (ركز بدقة عالية):
                             1. منع الغش وتطابق الدفاتر بصرياً وبنيوياً.
                             2. التدقيق عنواناً بعنوان وفقرة بفقرة بناءً على عناصر المرجع المذكور أعلاه.
-                            3. تدقيق حلول التمارين التطبيقية وتصحيحها كاملة ومقارنتها بالدرس المرجعي.
+                            3. تدقيق حلول Tمارين التطبيقية وتصحيحها كاملة ومقارنتها بالدرس المرجعي.
 
                             أعط تقريراً منظماً وبليغاً باللغة العربية كالتالي:
                             - 🚨 حالة الأمان ومكافحة الغش:
@@ -333,7 +354,7 @@ def student_space(df_students, df_lessons):
                             - 🎨 ملاحظة التنظيم والترتيب الهيكلي للدفتر:
                             """
                             
-                            model = genai.GenerativeModel("gemini-2.5-flash")
+                            model = genai.GenerativeModel("gemini-1.5-flash")
                             imgs = [Image.open(f) for f in up_files]
                             res = model.generate_content([prompt_instructions, *imgs])
                             
