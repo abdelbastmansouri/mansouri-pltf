@@ -331,7 +331,6 @@ def admin_space(df_students, df_reports, df_lessons):
                     st.error(f"عذراً، فشل الحذف: {ex}")
                 st.rerun()
 
- Tint = tab3
     with tab3:
         st.markdown("### 👥 تتبع السجل الأكاديمي للتلاميذ")
         if not df_students.empty:
@@ -358,7 +357,7 @@ def student_space(df_students, df_lessons):
     """, unsafe_allow_html=True)
     
     if df_students.empty:
-        st.warning("🔄 المنصة تقوم بتهدئة الاتصال مع خوادم جوجل حالياً, يرجى الانتظار لثوانٍ قليلة.")
+        st.warning("🔄 المنصة تقوم بتهدئة الاتصال مع خوادم جوجل حالياً، يرجى الانتظار لثوانٍ قليلة.")
         return
 
     df_students.columns = df_students.columns.str.strip()
