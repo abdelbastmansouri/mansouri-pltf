@@ -62,18 +62,22 @@ def get_gspread_client():
     return gspread.authorize(get_gcp_credentials())
 
 # دالة مطورة ومحصنة لرفع الملفات الكبيرة (مثل ملف 2.7MB) بنظام الأجزاء تفادياً للانقطاع
+# دالة مطورة لرفع الملفات داخل مجلد مشترك لتفادي خطأ قلة المساحة (Quota)
 def upload_pdf_to_drive(file_name, file_bytes):
     try:
         creds = get_gcp_credentials()
         drive_service = build('drive', 'v3', credentials=creds)
         
+        # ⚠️ ضع هنا الـ ID الخاص بالمجلد الشخصي الذي أنشأته وشاركت معه الحساب الخدمي (جرب لصقه بين العلامتين "")
+        SHARED_FOLDER_ID = "https://drive.google.com/drive/folders/1spaiwyei-TgC18Mb6l34Kz4uJW-7O5Wz"
+        
         file_metadata = {
             'name': file_name,
-            'mimeType': 'application/pdf'
+            'mimeType': 'application/pdf',
+            'parents': [SHARED_FOLDER_ID]  # إجبار الحساب الخدمي على الرفع داخل مساحتك الشخصية المستأجرة
         }
         
         fh = io.BytesIO(file_bytes)
-        # استخدام chunksize مخصص للرفع التدريجي الآمن للملفات الكبيرة
         media = MediaIoBaseUpload(fh, mimetype='application/pdf', chunksize=1024*1024, resumable=True)
         
         request = drive_service.files().create(
@@ -87,6 +91,15 @@ def upload_pdf_to_drive(file_name, file_bytes):
             status, response = request.next_chunk()
             
         file_id = response.get('id')
+        
+        # جعل الرابط متاحاً للقراءة لكل من يملكه لكي يفتحه التلاميذ والذكاء الاصطناعي
+        user_permission = {'type': 'anyone', 'role': 'reader'}
+        drive_service.permissions().create(fileId=file_id, body=user_permission).execute()
+        
+        return response.get('webViewLink')
+    except Exception as e:
+        st.error(f"❌ تعذر الرفع إلى Google Drive. تفاصيل العائق الإداري: {str(e)}")
+        return None
         
         # جعل الرابط متاحاً للقراءة لكل من يملكه لكي يفتحه التلاميذ والذكاء الاصطناعي
         user_permission = {'type': 'anyone', 'role': 'reader'}
