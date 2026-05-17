@@ -84,8 +84,9 @@ if 'role' not in st.session_state: st.session_state.role = None
 # دالة الربط مع خدمات جوجل
 def get_gcp_credentials():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    # هنا نكتفي بالملف السري الجديد وهو سيتكفل بالرفع في المجلد الذي شاركناه معه
     return Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
-
+    
 def get_gspread_client():
     return gspread.authorize(get_gcp_credentials())
 
@@ -97,7 +98,7 @@ def upload_pdf_to_drive(file_name, file_bytes):
         drive_service = build('drive', 'v3', credentials=creds)
         
         # الـ ID النظيف الخاص بمجلدك المشترك
-        SHARED_FOLDER_ID = "1spaiwyei-TgC18Mb6l34Kz4uJW-7O5Wz"
+        SHARED_FOLDER_ID = "1SwrvnMPTYLPSiV4B3Lyr6TiDCpurx_24"
         
         file_metadata = {
             'name': file_name,
