@@ -375,10 +375,10 @@ def student_space(df_students, df_lessons):
                             المهام والقيود الإلزامية المطلوبة منك أثناء التدقيق والتفتيش:
                             1. منع الغش وتطابق الدفاتر بصرياً وبنيوياً.
                             2. التدقيق عنواناً بعنوان وفقرة بفقرة بناءً على عناصر المرجع المذكور أعلاه.
-                            3. حلول التمارين التطبيقية كاملة ومقارنتها بالدرس المرجعي.
+                            3. مفارنة التمارين التطبيقة مع الدرس المرجعي والتأكد من حلول التمارين التطبيقية كاملة رغم عدم وجودها بالدرس المرجعي.
                             """
                             
-                            model = genai.GenerativeModel("gemini-1.5-flash")
+                            model = genai.GenerativeModel("gemini-2.5-flash")
                             imgs = [Image.open(f) for f in up_files]
                             res = model.generate_content([prompt_instructions, *imgs])
                             
