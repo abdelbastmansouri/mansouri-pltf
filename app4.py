@@ -19,62 +19,73 @@ st.set_page_config(
 )
 
 # تصميم وتنسيقات CSS المتقدمة: دمج الزخرفة المغربية والتدرج الانسيابي والشفافية
-# تصميم وتنسيقات CSS المتقدمة: دمج الزخرفة المغربية المهيكلة والتدرج الانسيابي والشفافية
+# كود التنسيق المطور لإدراج الخلفية المغربية الذهبية والزرقاء في جميع الواجهات
 st.markdown("""
     <style>
-    /* دمج نقش الزليج الهندسي كخلفية مائية مع التدرج اللوني للوزارة */
+    /* تطبيق الصورة كخلفية كاملة لجميع واجهات الموقع */
     .stApp { 
-        background: 
-            linear-gradient(to bottom, rgba(30, 58, 138, 0.96) 0%, rgba(248, 250, 252, 0.92) 25%, rgba(248, 250, 252, 0.85) 100%),
-            url('https://api.qr-code-generator.com/v1/front/images/geometric-patterns/mosaic.png') !important;
-        background-size: 320px !important; /* تحجيم النقوش الهندسية لتظهر بشكل متناسق ومكرر */
-        background-repeat: repeat !important;
+        background-image: linear-gradient(to bottom, rgba(248, 250, 252, 0.7) 0%, rgba(248, 250, 252, 0.5) 100%), 
+                          url('https://images.unsplash.com/photo-1590075865003-e48277afd55d?q=80&w=1000&auto=format&fit=crop') !important;
+        background-size: cover !important;
+        background-repeat: no-repeat !important;
         background-attachment: fixed !important;
+        background-position: center !important;
     }
     
-    /* جعل القائمة الجانبية متميزة وثابتة لتناسب هيبة اللون المخزني والأزرق الداكن */
+    /* تنسيق القائمة الجانبية لتتناسب مع ألوان الخلفية الجديدة */
     [data-testid="stSidebar"] { 
-        background-color: rgba(15, 23, 42, 0.97) !important; 
+        background-color: rgba(26, 54, 93, 0.96) !important; /* أزرق ملكي داكن مستوحى من زخرفة الصورة */
         color: white; 
     }
     [data-testid="stSidebar"] * { color: white !important; }
     
-    /* تأثير الزجاج الشفاف (Backdrop Filter) لبطاقات الإحصائيات لكي تظهر الزخرفة من ورائها برقي */
+    /* بطاقات الإحصائيات مع تأثير زجاجي شفاف ومؤطر بالذهبي لتبدو الخلفية واضحة من ورائها */
     .metric-card {
-        background-color: rgba(255, 255, 255, 0.88) !important;
-        backdrop-filter: blur(8px) !important;
-        -webkit-backdrop-filter: blur(8px) !important;
-        border-top: 5px solid #d97706 !important; /* اللون الذهبي المغربي للوزارة */
+        background-color: rgba(255, 255, 255, 0.9) !important;
+        backdrop-filter: blur(10px) !important;
+        -webkit-backdrop-filter: blur(10px) !important;
+        border-top: 5px solid #d4af37 !important; /* اللون الذهبي الملكي */
         padding: 20px;
         border-radius: 12px;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
         text-align: center;
+        border-left: 1px solid rgba(212, 175, 55, 0.3);
+        border-right: 1px solid rgba(212, 175, 55, 0.3);
     }
     
-    /* تأثير الزجاج الشفاف لعلامات التبويب (Tabs) */
+    /* الواجهات الداخلية وعلامات التبويب (Tabs) بتأثير زجاجي أنيق */
     .stTabs [data-baseweb="tab-panel"] {
-        background-color: rgba(255, 255, 255, 0.82) !important;
+        background-color: rgba(255, 255, 255, 0.85) !important;
         backdrop-filter: blur(8px) !important;
         -webkit-backdrop-filter: blur(8px) !important;
         padding: 25px;
         border-radius: 12px;
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.03);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
         margin-top: 15px;
-        border: 1px solid rgba(255, 255, 255, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.6);
     }
 
-    h1, h2, h3 { color: #1e3a8a !important; font-family: 'Segoe UI', sans-serif; font-weight: bold; }
+    /* العناوين الرئيسية بلون أزرق داكن متناسق */
+    h1, h2, h3 { 
+        color: #1a365d !important; 
+        font-family: 'Segoe UI', sans-serif; 
+        font-weight: bold; 
+    }
     
-    /* أزرار تفاعلية احترافية */
+    /* أزرار تفاعلية باللون الأزرق الملكي وتتحول للذهبي عند تمرير الفأرة */
     .stButton>button {
-        background-color: #1e3a8a !important; color: white !important;
-        border-radius: 8px !important; border: none !important;
-        padding: 10px 24px !important; font-weight: bold !important;
+        background-color: #1a365d !important; 
+        color: white !important;
+        border-radius: 8px !important; 
+        border: 1px solid #d4af37 !important;
+        padding: 10px 24px !important; 
+        font-weight: bold !important;
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
     .stButton>button:hover {
-        background-color: #d97706 !important;
-        box-shadow: 0 4px 14px rgba(217, 119, 6, 0.4) !important;
+        background-color: #d4af37 !important; /* يتحول للذهبي */
+        color: #1a365d !important;
+        box-shadow: 0 4px 14px rgba(212, 175, 55, 0.4) !important;
         transform: translateY(-1px);
     }
     </style>
