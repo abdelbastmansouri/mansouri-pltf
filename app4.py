@@ -197,8 +197,8 @@ def get_lesson_ref(lesson_name, df_lessons):
     # الروابط الثابتة المباشرة للملفات التي وضعتها في الـ Google Drive الخاص بك
     # يرجى استبدال هذه الروابط بروابط ملفاتك الحقيقية من الدريف
     DRIVE_LINKS = {
-        "الدرس 1": "https://drive.google.com/file/d/1Xxxxxxx_YOUR_LESSON_1_ID_xxxxxx/view?usp=sharing",
-        "الدرس 2": "https://drive.google.com/file/d/1Yyyyyy_YOUR_LESSON_2_ID_yyyyyy/view?usp=sharing",
+        "الدرس 1": "https://drive.google.com/file/d/1WiHUq1rTQPX-VdzKvB6BT50K_vP3ZaQt/view?usp=drive_link",
+        "الدرس 2": "https://drive.google.com/file/d/1XMLhrjUkjzTQuUYKqNGj-BslSFSztKyz/view?usp=drive_link",
         "الدرس 3": "" # اتركها فارغة إذا كان التلميذ يرسل تمارين فقط دون ملف مرجعي
     }
     
@@ -435,7 +435,7 @@ if st.button(f"بدء المعالجة والتدقيق الفوري لـ {l_nam
                                     أنت مساعد أستاذ رياضيات عبقري ومراقب تربوي محفز بالثانوية التأهيلية المغربية.
                                     التلميذ {st.session_state.user['name']} (القسم: {st.session_state.user['class']}) أرسل صور واجباته لدرس ({l_name}).
 
-                                    قم بتدقيق الصور بناءً على المعارف القياسية المقررة في المنهاج المغربي لمستوى الجذع المشترك علمي (TCS) لدرس {l_name}.
+                                    قم بتدقيق الصور بناءً على المعارف القياسية المقررة في المنهاج المغربي والتوجيهات التربوية للرياضيات وكتاب Etinclle TC لمستوى الجذع المشترك علمي (TCS) لدرس {l_name}.
                                     تأكد من وجود مجهود فعلي وحلول للتمارين، وصغ تقريراً مشجعاً يوضح الفقرات المكتوبة وصحة الحلول الرياضية.
                                     """
                                 else:
