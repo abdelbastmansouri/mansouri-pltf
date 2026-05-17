@@ -460,7 +460,7 @@ if st.session_state.role == "student":
     student_space(df_students, df_lessons)
 elif st.session_state.role == "admin":
     if not st.session_state.auth:
-        st.markdown("<h3 style='color: #1e3a8a;'>🔑 فضاء الأستاذ والإدارة التربوية</h3>")
+        st.markdown("<h3 style='color: #1e3a8a;'>🔑 فضاء الأستاذ والإدارة التربوية</h3>", unsafe_allow_html=True)
         admin_pwd = st.text_input("الرجاء إدخال كلمة سر الولوج الإدارية المخصصة:", type="password")
         if st.button("تأكيد الهوية 👨‍🏫", use_container_width=True):
             if admin_pwd == "1234":
