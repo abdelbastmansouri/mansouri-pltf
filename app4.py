@@ -25,9 +25,9 @@ def get_custom_bg():
     # تم تقليل شفافيتها لضمان وضوح وقراءة النصوص الرياضية والتقارير بدقة عالية
     return """
     <style>
-    .stApp {
+    html, body, [data-testid="stAppViewContainer"], .stApp {
         background-image: linear-gradient(to bottom, rgba(245, 247, 250, 0.92) 0%, rgba(240, 244, 248, 0.85) 100%), 
-        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='%231a365d' fill-opacity='0.04'%3E%3Cpath d='M0 0h40v40H0V0zm40 40h40v40H40V40zm0-40h2l-2 2V0zm0 4l4-4h2L40 6V4zm0 4l6-6h2L40 10V8zm0 4l8-8h2L40 14v-2zm0 4l10-10h2L40 18v-2zm0 4l12-12h2L40 22v-2zm0 4l14-14h2L40 26v-2zm0 4l16-16h2L40 30v-2zm0 4l18-18h2L40 34v-2zm0 4l20-20h2L40 38v-2zm0 4l22-22h2L40 42v-2zm0 4l24-24h2L40 46v-2zm0 4l26-26h2L40 50v-2zm0 4l28-28h2L40 54v-2zm0 4l30-30h2L40 58v-2zm0 4l32-32h2L40 62v-2zm0 4l34-34h2L40 66v-2zm0 4l36-36h2L40 70v-2zm0 4l38-38h2L40 74v-2zm0 4l40-40h2L42 80h-2v-2zm4-4l36-36h2L46 80h-2v-2zm4-4l32-32h2L50 80h-2v-2zm4-4l28-28h2L54 80h-2v-2zm4-4l24-24h2L58 80h-2v-2zm4-4l20-20h2L62 80h-2v-2zm4-4l16-16h2L66 80h-2v-2zm4-4l12-12h2L70 80h-2v-2zm4-4l8-8h2L74 80h-2v-2zm4-4l4-4h2L78 80h-2v-2z'/%3E%3C/g%3E%3C/svg%3E");
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='%231a365d' fill-opacity='0.04'%3E%3Cpath d='M0 0h40v40H0V0zm40 40h40v40H40V40zm0-40h2l-2 2V0zm0 4l4-4h2L40 6V4zm0 4l6-6h2L40 10V8zm0 4l8-8h2L40 14v-2zm0 4l10-10h2L40 18v-2zm0 4l12-12h2L40 22v-2zm0 4l14-14h2L40 26v-2zm0 4l16-16h2L40 30v-2zm0 4l18-18h2L40 34v-2zm0 4l20-20h2L40 38v-2zm0 4l22-22h2L40 42v-2zm0 4l24-24h2L40 46v-2zm0 4l26-26h2L40 50v-2zm0 4l28-28h2L40 54v-2zm0 4l30-30h2L40 58v-2zm0 4l32-32h2L40 62v-2zm0 4l34-34h2L40 66v-2zm0 4l36-36h2L40 70v-2zm0 4l38-38h2L40 74v-2zm0 4l40-40h2L42 80h-2v-2zm4-4l36-36h2L46 80h-2v-2zm4-4l32-32h2L50 80h-2v-2zm4-4l28-28h2L54 80h-2v-2zm4-4l24-24h2L58 80h-2v-2zm4-4l20-20h2L62 80h-2v-2zm4-4l16-16h2L66 80h-2v-2zm4-4l12-12h2L70 80h-2v-2zm4-4l8-8h2L74 80h-2v-2zm4-4l4-4h2L78 80h-2v-2z'/%3E%3C/g%3E%3C/svg%3E") !important;
         background-size: auto !important;
         background-repeat: repeat !important;
         background-attachment: fixed !important;
@@ -40,7 +40,7 @@ def get_custom_bg():
     [data-testid="stSidebar"] * { color: white !important; }
     
     /* البطاقات التفاعلية وصناديق الاختيار بتأثير زجاجي شفاف ومحاطة بلمسة ذهبية خفيفة */
-    .stSelectbox, .stTextInput, .metric-card, .stTextArea {
+    .stSelectbox, .stTextInput, .metric-card, .stTextArea, div[data-testid="stExpander"] {
         background-color: rgba(255, 255, 255, 0.95) !important;
         backdrop-filter: blur(8px) !important;
         -webkit-backdrop-filter: blur(8px) !important;
@@ -65,6 +65,7 @@ def get_custom_bg():
         padding: 10px 24px !important;
         font-weight: bold !important;
         transition: all 0.2s ease;
+        width: 100%;
     }
     .stButton>button:hover {
         background-color: #d4af37 !important; 
@@ -76,8 +77,11 @@ def get_custom_bg():
 
 st.markdown(get_custom_bg(), unsafe_allow_html=True)
 
-# إعداد مفتاح Gemini
-genai.configure(api_key="AIzaSyAwhWzEseoWORwT8eBLWBNB57wkuFxaBeA")
+# تفعيل الربط السحابي الآمن مع مفتاح Gemini الجديد المودع في Secrets
+try:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+except Exception as e:
+    st.error("⚠️ لم يتم العثور على مفتاح 'GEMINI_API_KEY' في إعدادات Secrets الخاصة بـ Streamlit. المرجو إضافته أولاً.")
 
 if 'auth' not in st.session_state: st.session_state.auth = False
 if 'user' not in st.session_state: st.session_state.user = {}
@@ -191,7 +195,7 @@ df_students, df_reports, df_lessons = load_data()
 
 def get_lesson_ref(lesson_name, df_lessons):
     if not df_lessons.empty and "الدرس" in df_lessons.columns:
-        row = df_lessons[df_lessons["الدرس"] == lesson_name]
+        row = df_lessons[df_lessons["الدرس"].str.strip() == lesson_name.strip()]
         if not row.empty:
             return row.iloc[0]["الملاحظات_المرجعية"]
     return "لا توجد ملاحظات مرجعية ثابتة محددة لهذا الدرس من طرف الأستاذ."
@@ -285,7 +289,7 @@ def admin_space(df_students, df_reports, df_lessons):
                         
                         updated = False
                         for row in rows:
-                            if row and row[0] == lesson_choice:
+                            if row and row[0].strip() == lesson_choice.strip():
                                 row[1] = full_reference_text
                                 row[2] = datetime.now().strftime("%Y-%m-%d %H:%M")
                                 updated = True
@@ -316,7 +320,7 @@ def admin_space(df_students, df_reports, df_lessons):
                         headers = all_vals[0]
                         rows = all_vals[1:]
                         for row in rows:
-                            if row and row[0] == lesson_choice:
+                            if row and row[0].strip() == lesson_choice.strip():
                                 row[1] = "لا توجد ملاحظات مرجعية حالياً"
                                 row[2] = ""
                                 break
@@ -327,6 +331,7 @@ def admin_space(df_students, df_reports, df_lessons):
                     st.error(f"عذراً، فشل الحذف: {ex}")
                 st.rerun()
 
+ Tint = tab3
     with tab3:
         st.markdown("### 👥 تتبع السجل الأكاديمي للتلاميذ")
         if not df_students.empty:
@@ -353,7 +358,7 @@ def student_space(df_students, df_lessons):
     """, unsafe_allow_html=True)
     
     if df_students.empty:
-        st.warning("🔄 المنصة تقوم بتهدئة الاتصال مع خوادم جوجل حالياً، يرجى الانتظار لثوانٍ قليلة.")
+        st.warning("🔄 المنصة تقوم بتهدئة الاتصال مع خوادم جوجل حالياً, يرجى الانتظار لثوانٍ قليلة.")
         return
 
     df_students.columns = df_students.columns.str.strip()
@@ -403,47 +408,49 @@ def student_space(df_students, df_lessons):
                 if st.button(f"بدء المعالجة والتدقيق الفوري لـ {l_name}", key=f"btn_{l_name}"):
                     if up_files:
                         with st.spinner("🔄 جاري سحب المرجع التربوي السحابي الثابت وفحص الدفتر..."):
-                            
-                            if "الدرس 3" in l_name:
-                                prompt_instructions = f"""
-                                أنت أستاذ مساعد لمادة الرياضيات بالثانوية التأهلية، ومهمتك الحالية هي مراقبة وتأكيد إنجاز التمارين والبحوث المنزلية.
-                                التلميذ: {st.session_state.user['name']} (القسم: {st.session_state.user['class']}) أرسل صور واجباته لدرس ({l_name}).
+                            try:
+                                if "الدرس 3" in l_name:
+                                    prompt_instructions = f"""
+                                    أنت أستاذ مساعد لمادة الرياضيات بالثانوية التأهلية، ومهمتك الحالية هي مراقبة وتأكيد إنجاز التمارين والبحوث المنزلية.
+                                    التلميذ: {st.session_state.user['name']} (القسم: {st.session_state.user['class']}) أرسل صور واجباته لدرس ({l_name}).
 
-                                المهام والقيود الإلزامية المطلوبة منك:
-                                1. تحقق بصرياً ومنطقياً بدقة عالية هل الصورة المرفوعة تحتوي فعلاً على تمارين رياضيات، معادلات، حلول، أو بحوث مكتوبة بخط اليد أو منجزة في ورقة/دفتر.
-                                2. لا تعتمد على أي مرجع سابق ولا تقارن المحتوى بأي درس، فالمطلوب فقط هو التأكد من وجود مجهود وإنجاز فعلي للواجب المنزلي.
-                                3. إذا كانت الصورة صحيحة وتحتوي على تمارين، صغ رداً تربوياً مشجعاً ومحفزاً يؤكد للتلميذ أنه تم قبول إرساله بنجاح (مثال: أحسنتم، تم تسجيل إنجازكم للتمارين بنجاح...).
-                                4. إذا كانت الصورة فارغة، أو غير واضحة، أو لا علاقة لها بالرياضيات والواجبات، أخبر التلميذ بلطف أن الصورة غير مطابقة وشجعه على إعادة رفع صورة واضحة لتمارينه لتسجيل الحضور.
+                                    المهام والقيود الإلزامية المطلوبة منك:
+                                    1. تحقق بصرياً ومنطقياً بدقة عالية هل الصورة المرفوعة تحتوي فعلاً على تمارين رياضيات، معادلات، حلول، أو بحوث مكتوبة بخط اليد أو منجزة في ورقة/دفتر.
+                                    2. لا تعتمد على أي مرجع سابق ولا تقارن المحتوى بأي درس، فالمطلوب فقط هو التأكد من وجود مجهود وإنجاز فعلي للواجب المنزلي.
+                                    3. إذا كانت الصورة صحيحة وتحتوي على تمارين، صغ رداً تربوياً مشجعاً ومحفزاً يؤكد للتلميذ أنه تم قبول إرساله بنجاح (مثال: أحسنتم، تم تسجيل إنجازكم للتمارين بنجاح...).
+                                    4. إذا كانت الصورة فارغة، أو غير واضحة، أو لا علاقة لها بالرياضيات والواجبات، أخبر التلميذ بلطف أن الصورة غير مطابقة وشجعه على إعادة رفع صورة واضحة لتمارينه لتسجيل الحضور.
+                                    
+                                    لغة الرد: اللغة العربية بأسلوب تربوي رصين ومحفز.
+                                    """
+                                else:
+                                    prompt_instructions = f"""
+                                    أنت مساعد أستاذ رياضيات عبقري ومراقب صارم جداً مكلف بكشف الغش والنسخ وتدقيق الدفاتر. 
+                                    التلميذ {st.session_state.user['name']} (القسم: {st.session_state.user['class']}) أرسل صور دفتره لدرس ({l_name}).
+
+                                    المرجع الأساسي المعتمد لهذا الدرس والمرفوع من طرف الأستاذ هو:
+                                    \"\"\"{saved_lesson_reference}\"\"\"
+
+                                    المهام والقيود الإلزامية المطلوبة منك أثناء التدقيق والتفتيش:
+                                    1. منع الغش وتطابق الدفاتر بصرياً وبنيوياً.
+                                    2. التدقيق عنواناً بعنوان وفقرة بفقرة بناءً على عناصر المرجع المذكور أعلاه.
+                                    3. مقارنة التمارين التطبيقية مع الدرس المرجعي والتأكد من حلول التمارين التطبيقية كاملة رغم عدم وجودها بالدرس المرجعي.  
+                                    
+                                    لغة الرد: اللغة العربية بأسلوب تربوي رصين.
+                                    """
                                 
-                                لغة الرد: اللغة العربية بأسلوب تربوي رصين ومحفز.
-                                """
-                            else:
-                                prompt_instructions = f"""
-                                أنت مساعد أستاذ رياضيات عبقري ومراقب صارم جداً مكلف بكشف الغش والنسخ وتدقيق الدفاتر. 
-                                التلميذ {st.session_state.user['name']} (القسم: {st.session_state.user['class']}) أرسل صور دفتره لدرس ({l_name}).
-
-                                المرجع الأساسي المعتمد لهذا الدرس والمرفوع من طرف الأستاذ هو:
-                                \"\"\"{saved_lesson_reference}\"\"\"
-
-                                المهام والقيود الإلزامية المطلوبة منك أثناء التدقيق والتفتيش:
-                                1. منع الغش وتطابق الدفاتر بصرياً وبنيوياً.
-                                2. التدقيق عنواناً بعنوان وفقرة بفقرة بناءً على عناصر المرجع المذكور أعلاه.
-                                3. مقارنة التمارين التطبيقية مع الدرس المرجعي والتأكد من حلول التمارين التطبيقية كاملة رغم عدم وجودها بالدرس المرجعي.  
+                                model = genai.GenerativeModel("gemini-2.5-flash")
+                                imgs = [Image.open(f) for f in up_files]
+                                res = model.generate_content([prompt_instructions, *imgs])
                                 
-                                لغة الرد: اللغة العربية بأسلوب تربوي رصين.
-                                """
-                            
-                            model = genai.GenerativeModel("gemini-2.5-flash")
-                            imgs = [Image.open(f) for f in up_files]
-                            res = model.generate_content([prompt_instructions, *imgs])
-                            
-                            client = get_gspread_client()
-                            sh = client.open("les classes").worksheet("Reports")
-                            sh.append_row([datetime.now().strftime("%Y-%m-%d"), st.session_state.user['name'], st.session_state.user['class'], l_name, res.text, "تم التدقيق بنجاح"])
-                            
-                            st.markdown("### 📋التقرير الرقمي لتدقيق الدفتر المستلم")
-                            st.info(res.text)
-                            st.success("تم حفظ التقرير التربوي في سجلات الأستاذ السحابية بنجاح ✅")
+                                client = get_gspread_client()
+                                sh = client.open("les classes").worksheet("Reports")
+                                sh.append_row([datetime.now().strftime("%Y-%m-%d"), st.session_state.user['name'], st.session_state.user['class'], l_name, res.text, "تم التدقيق بنجاح"])
+                                
+                                st.markdown("### 📋التقرير الرقمي لتدقيق الدفتر المستلم")
+                                st.info(res.text)
+                                st.success("تم حفظ التقرير التربوي في سجلات الأستاذ السحابية بنجاح ✅")
+                            except Exception as gemini_err:
+                                st.error(f"❌ حدث خطأ أثناء فحص الدفتر برمجياً: {gemini_err}")
                     else:
                         st.warning("⚠️ المرجو تزويد المنصة بصور الدفتر أولاً.")
 
