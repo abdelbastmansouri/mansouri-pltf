@@ -19,57 +19,63 @@ st.set_page_config(
 )
 
 # تصميم وتنسيقات CSS المتقدمة: دمج الزخرفة المغربية والتدرج الانسيابي والشفافية
+# تصميم وتنسيقات CSS المتقدمة: دمج الزخرفة المغربية المهيكلة والتدرج الانسيابي والشفافية
 st.markdown("""
     <style>
-    /* خلفية متناسقة برابط مستقر للزليج المغربي */
+    /* دمج نقش الزليج الهندسي كخلفية مائية مع التدرج اللوني للوزارة */
     .stApp { 
         background: 
-            linear-gradient(to bottom, rgba(30, 58, 138, 0.95) 0%, rgba(248, 250, 252, 0.85) 20%, rgba(248, 250, 252, 0.4) 100%),
-            url('https://images.unsplash.com/photo-1590075865003-e48277afd55d?q=80&w=1000&auto=format&fit=crop');
-        background-size: cover;
-        background-repeat: no-repeat;
-        background-attachment: fixed;
+            linear-gradient(to bottom, rgba(30, 58, 138, 0.96) 0%, rgba(248, 250, 252, 0.92) 25%, rgba(248, 250, 252, 0.85) 100%),
+            url('https://api.qr-code-generator.com/v1/front/images/geometric-patterns/mosaic.png') !important;
+        background-size: 320px !important; /* تحجيم النقوش الهندسية لتظهر بشكل متناسق ومكرر */
+        background-repeat: repeat !important;
+        background-attachment: fixed !important;
     }
     
-    /* جعل القائمة الجانبية متميزة وثابتة */
+    /* جعل القائمة الجانبية متميزة وثابتة لتناسب هيبة اللون المخزني والأزرق الداكن */
     [data-testid="stSidebar"] { 
-        background-color: rgba(15, 23, 42, 0.95) !important; 
+        background-color: rgba(15, 23, 42, 0.97) !important; 
         color: white; 
     }
     [data-testid="stSidebar"] * { color: white !important; }
     
-    /* جعل بطاقات الإحصائيات والصناديق البيضاء شفافة وأنيقة لتظهر الخلفية من ورائها */
+    /* تأثير الزجاج الشفاف (Backdrop Filter) لبطاقات الإحصائيات لكي تظهر الزخرفة من ورائها برقي */
     .metric-card {
-        background-color: rgba(255, 255, 255, 0.85);
-        backdrop-filter: blur(5px);
-        border-top: 4px solid #d97706;
+        background-color: rgba(255, 255, 255, 0.88) !important;
+        backdrop-filter: blur(8px) !important;
+        -webkit-backdrop-filter: blur(8px) !important;
+        border-top: 5px solid #d97706 !important; /* اللون الذهبي المغربي للوزارة */
         padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
         text-align: center;
     }
     
-    /* جعل خلفيات الـ Tabs شفافة أيضاً لتنسجم مع الزليج */
+    /* تأثير الزجاج الشفاف لعلامات التبويب (Tabs) */
     .stTabs [data-baseweb="tab-panel"] {
-        background-color: rgba(255, 255, 255, 0.75);
-        backdrop-filter: blur(5px);
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-        margin-top: 10px;
+        background-color: rgba(255, 255, 255, 0.82) !important;
+        backdrop-filter: blur(8px) !important;
+        -webkit-backdrop-filter: blur(8px) !important;
+        padding: 25px;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.03);
+        margin-top: 15px;
+        border: 1px solid rgba(255, 255, 255, 0.5);
     }
 
     h1, h2, h3 { color: #1e3a8a !important; font-family: 'Segoe UI', sans-serif; font-weight: bold; }
     
+    /* أزرار تفاعلية احترافية */
     .stButton>button {
         background-color: #1e3a8a !important; color: white !important;
         border-radius: 8px !important; border: none !important;
         padding: 10px 24px !important; font-weight: bold !important;
-        transition: all 0.3s ease;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
     .stButton>button:hover {
         background-color: #d97706 !important;
-        box-shadow: 0 4px 12px rgba(217, 119, 6, 0.3);
+        box-shadow: 0 4px 14px rgba(217, 119, 6, 0.4) !important;
+        transform: translateY(-1px);
     }
     </style>
     """, unsafe_allow_html=True)
@@ -449,7 +455,7 @@ def student_space(df_students, df_lessons):
                             sh = client.open("les classes").worksheet("Reports")
                             sh.append_row([datetime.now().strftime("%Y-%m-%d"), st.session_state.user['name'], st.session_state.user['class'], l_name, res.text, "تم التدقيق بنجاح"])
                             
-                            st.markdown("### 📋 تقرير الوزارة الرقمي لتدقيق الدفتر المستلم")
+                            st.markdown("### 📋التقرير الرقمي لتدقيق الدفتر المستلم")
                             st.info(res.text)
                             st.success("تم حفظ التقرير التربوي في سجلات الأستاذ السحابية بنجاح ✅")
                     else:
@@ -460,7 +466,7 @@ if st.session_state.role == "student":
     student_space(df_students, df_lessons)
 elif st.session_state.role == "admin":
     if not st.session_state.auth:
-        st.markdown("<h3 style='color: #1e3a8a;'>🔑 فضاء الأستاذ والإدارة التربوية</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #1e3a8a;'>🔑 فضاء الأستاذ  </h3>", unsafe_allow_html=True)
         admin_pwd = st.text_input("الرجاء إدخال كلمة سر الولوج الإدارية المخصصة:", type="password")
         if st.button("تأكيد الهوية 👨‍🏫", use_container_width=True):
             if admin_pwd == "1234":
