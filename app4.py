@@ -434,40 +434,40 @@ def student_space(df_students, df_lessons):
         lesson_tabs = st.tabs(["📘 المجزوءة / الدرس 1", "📗 المجزوءة / الدرس 2", "📙 المجزوءة / الدرس 3"])
         
         for i, tab in enumerate(lesson_tabs):
-    with tab:
-        l_name = f"الدرس {i+1}"
-        st.markdown(f"#### 📸 مركز رفع صور دفتر مادة الرياضيات - {l_name}")
-        
-        saved_lesson_reference = get_lesson_ref(l_name, df_lessons)
-        up_files = st.file_uploader(f"اختر صور صفحات الدفتر لـ {l_name}", accept_multiple_files=True, key=f"up_{l_name}", type=['jpg','jpeg','png'])
-        
-        if st.button(f"بدء المعالجة والتدقيق الفوري لـ {l_name}", key=f"btn_{l_name}"):
-            if up_files:
+            with tab:
+                l_name = f"الدرس {i+1}"
+                st.markdown(f"#### 📸 مركز رفع صور دفتر مادة الرياضيات - {l_name}")
                 
-                # 🔍 1. التحقق الذكي المسبق: هل التلميذ أرسل تقريراً مسبقاً لهذا الدرس المعين؟
-                student_name = st.session_state.user['name'] # اسم التلميذ الحالي من الجلسة
+                saved_lesson_reference = get_lesson_ref(l_name, df_lessons)
+                up_files = st.file_uploader(f"اختر صور صفحات الدفتر لـ {l_name}", accept_multiple_files=True, key=f"up_{l_name}", type=['jpg','jpeg','png'])
                 
+                if st.button(f"بدء المعالجة والتدقيق الفوري لـ {l_name}", key=f"btn_{l_name}"):
+                    if up_files:
+                        
+                        # 🔍 1. التحقق الذكي المسبق: هل التلميذ أرسل تقريراً مسبقاً لهذا الدرس المعين؟
+                        student_name = st.session_state.user['name'] # اسم التلميذ الحالي من الجلسة
+                        
                 # فحص جدول df_reports (تأكد من مطابقة أسماء الأعمدة 'الاسم' و 'الدرس' مع جدولك)
-                duplicate_check = df_reports[
+                    duplicate_check = df_reports[
                     (df_reports['الاسم'] == student_name) & 
                     (df_reports['الدرس'] == l_name)
-                ]
-                
-                if not duplicate_check.empty:
-                    # 🛑 إذا وجد النظام تقريراً سابقاً، يتم إيقاف العملية فوراً وإظهار رسالة التنبيه المخصصة
-                    st.warning(
-                        f"⚠️ **تنبيه هام:** لقد أرسلت مسبقاً صوراً لـ ({l_name})! "
-                        "لا يمكنك الإرسال مرتين قبل إزالة التقرير الأول. "
-                        "الرجاء التواصل مع الأستاذ ليقوم بإزالة تقرير الدرس الأول، بعد ذلك يمكنك إعادة الإرسال."
-                    )
-                else:
-                    # ✅ إذا كان السجل خالياً، يستمر البرنامج في تفعيل الذكاء الاصطناعي بشكل طبيعي
-                    with st.spinner("🔄 جاري سحب المرجع التربوي السحابي الثابت وفحص الدفتر..."):
-                        try:
-                            clean_ref = saved_lesson_reference.strip()
-                            is_ref_empty = "N/A" in clean_ref or clean_ref == "" or "لا توجد ملاحظات" in clean_ref
-
-                            if is_ref_empty:
+                    ]
+                    
+                    if not duplicate_check.empty:
+                        # 🛑 إذا وجد النظام تقريراً سابقاً، يتم إيقاف العملية فوراً وإظهار رسالة التنبيه المخصصة
+                        st.warning(
+                            f"⚠️ **تنبيه هام:** لقد أرسلت مسبقاً صوراً لـ ({l_name})! "
+                            "لا يمكنك الإرسال مرتين قبل إزالة التقرير الأول. "
+                            "الرجاء التواصل مع الأستاذ ليقوم بإزالة تقرير الدرس الأول، بعد ذلك يمكنك إعادة الإرسال."
+                        )
+                    else:
+                        # ✅ إذا كان السجل خالياً، يستمر البرنامج في تفعيل الذكاء الاصطناعي بشكل طبيعي
+                        with st.spinner("🔄 جاري سحب المرجع التربوي السحابي الثابت وفحص الدفتر..."):
+                            try:
+                                clean_ref = saved_lesson_reference.strip()
+                                is_ref_empty = "N/A" in clean_ref or clean_ref == "" or "لا توجد ملاحظات" in clean_ref
+                                
+                                if is_ref_empty:
                                 prompt_instructions = f"""
                                 أنت مساعد أستاذ رياضيات عبقري ومراقب تربوي محفز بالثانوية التأهلية المغربية.
                                 التلميذ {st.session_state.user['name']} (القسم: {st.session_state.user['class']}) أرسل صور واجباته لدرس ({l_name}).
