@@ -278,7 +278,7 @@ def get_lesson_ref(lesson_name, df_lessons):
 with st.sidebar:
     st.markdown("""
         <div style='text-align: center; padding: 10px;'>
-        <img src='https://www.flaticon.com/fr/icones-gratuites/moniteur' style='border-radius: 50%; background: white; padding: 10px; width: 80px;'/>
+        st.info(f"🎓 {st.session_state.user.get('class')}")
         <h3 style='color: #FFD700 !important; font-size: 1.3rem; margin-top: 10px; text-shadow: 1px 1px 2px black;'>وزارة التربية الوطنية والتعليم الأولي والرياضة</h3>
             <p style='color: #cbd5e1 !important; font-size: 0.95rem;'>ثانوية الزرقطوني التأهيلية</p>
         </div>
