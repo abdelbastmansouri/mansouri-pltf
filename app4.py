@@ -138,7 +138,7 @@ def upload_pdf_to_drive(file_name, file_bytes):
 def calculate_image_hash(file_bytes):
     return hashlib.md5(file_bytes).hexdigest()
 
-@st.cache_data(ttl=5) # تقليل الكاش إلى 5 ثوانٍ لضمان جلب البيانات فوراً بعد الإرسال
+@st.cache_data(ttl=2) # تقليل مدة الكاش للتحديث الفوري بعد الحذف
 def load_data():
     sh = None
     for attempt in range(4):
@@ -172,7 +172,6 @@ def load_data():
             df_reports = pd.DataFrame(reports_rows[1:], columns=reports_headers)
             df_reports.columns = df_reports.columns.str.strip()
             
-            # توحيد كافة المسميات المحتملة لعمود الاسم لتجنب أخطاء الفلترة
             for col in df_reports.columns:
                 if col in ["إسم", "اسم", "اسم التلميذ", "إسم التلميذ"]:
                     df_reports = df_reports.rename(columns={col: "الاسم"})
@@ -248,7 +247,7 @@ def admin_space(df_students, df_reports, df_lessons):
         </div>
     """, unsafe_allow_html=True)
     
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 لوحة الإحصائيات", "📂 إضافة ورفع الدروس المرجعية", "👥 تتبع سجلات التلاميذ", "⚙️ الإعدادات"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 لوحة الإحصائيات", "📂 إضافة ورفع الدروس المرجعية", "👥 تتبع سجلات التلاميذ وتصفيرها", "⚙️ الإعدادات"])
     
     with tab1:
         st.markdown("<div class='section-title'>📈 المؤشرات التربوية العامة</div>", unsafe_allow_html=True)
@@ -305,13 +304,99 @@ def admin_space(df_students, df_reports, df_lessons):
                 st.rerun()
 
     with tab3:
-        st.markdown("<div class='section-title'>👥 تتبع السجل الأكاديمي للتلاميذ</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>👥 تتبع وتقارير التلاميذ الحالية</div>", unsafe_allow_html=True)
         if not df_reports.empty:
             st.dataframe(df_reports, use_container_width=True)
+        else:
+            st.info("لا توجد تقارير مرسلة حالياً.")
+            
+        st.divider()
+        
+        # --- 🛠️ لوحة تصفير وإعادة تعيين معطيات تلميذ معين تلبة لطلبك المباشر ---
+        st.markdown("<div class='section-title'>🗑️ لوحة الإلغاء والتصفير (منح فرصة ثانية للتلميذ)</div>", unsafe_allow_html=True)
+        st.write("يمكنك من هنا اختيار تلميذ معين لحذف تقاريره من قاعدة البيانات ليعيد المحاولة والإرسال:")
+        
+        if not df_reports.empty and 'القسم' in df_reports.columns:
+            # 1. اختيار القسم
+            available_classes = ["---"] + sorted(df_reports['القسم'].dropna().unique().tolist())
+            chosen_class = st.selectbox("1️⃣ اختر قسم التلميذ المراد تصفيره:", available_classes, key="reset_class_select")
+            
+            if chosen_class != "---":
+                # فحص التلاميذ الذين أرسلوا بالفعل من هذا القسم
+                df_filtered_class = df_reports[df_reports['القسم'] == chosen_class]
+                
+                # بناء مصفوفة تحتوي على (الاسم - رقم مسار) لمنع التشابه
+                student_options = []
+                student_mapping = {} # لربط الخيار المكتوب برقم مسار للتأكد التام
+                
+                for idx, r in df_filtered_class.iterrows():
+                    m_id = str(r.get('رقم مسار', '')).strip().upper()
+                    s_name = str(r.get('الاسم', '')).strip()
+                    display_text = f"👤 {s_name} (مسار: {m_id})"
+                    if display_text not in student_options:
+                        student_options.append(display_text)
+                        student_mapping[display_text] = m_id
+                
+                # 2. اختيار التلميذ المستهدف
+                chosen_student_profile = st.selectbox("2️⃣ اختر التلميذ المستهدف بالتصفير:", ["---"] + student_options, key="reset_student_select")
+                
+                # 3. اختيار الدرس المستهدف أو تصفير الكل
+                target_lesson_to_reset = st.selectbox("3️⃣ حدد النطاق المراد حذفه وتصفيره:", ["كل الدروس", "الدرس 1", "الدرس 2", "الدرس 3"], key="reset_lesson_select")
+                
+                if chosen_student_profile != "---":
+                    target_massar_id = student_mapping[chosen_student_profile]
+                    
+                    # زر التأكيد النهائي للحذف
+                    if st.button("🔥 تصفير وإعادة تعيين معطيات التلميذ الآن", use_container_width=True):
+                        with st.spinner("جاري الاتصال السحابي وإلغاء القيود..."):
+                            try:
+                                client = get_gspread_client()
+                                sh = client.open("les classes")
+                                ws_reports = sh.worksheet("Reports")
+                                all_rows = ws_reports.get_all_values()
+                                
+                                if all_rows and len(all_rows) > 1:
+                                    headers = all_rows[0]
+                                    old_records = all_rows[1:]
+                                    
+                                    # بناء المصفوفة الجديدة مع استثناء السجل المستهدف
+                                    new_records = []
+                                    deleted_count = 0
+                                    
+                                    for row in old_records:
+                                        # التأكد من طول الصف لعدم حدوث خطأ في الفهرسة
+                                        if len(row) >= 5:
+                                            row_massar = str(row[1]).strip().upper()    # العمود B هو رقم مسار
+                                            row_lesson = str(row[4]).strip()            # العمود E هو الدرس
+                                            
+                                            # شرط المطابقة
+                                            match_massar = (row_massar == target_massar_id)
+                                            match_lesson = (target_lesson_to_reset == "كل الدروس" or row_lesson == target_lesson_to_reset)
+                                            
+                                            if match_massar and match_lesson:
+                                                deleted_count += 1
+                                                continue # نتخطى السجل فلا يتم حفظه (أي يُحذف)
+                                        
+                                        new_records.append(row)
+                                    
+                                    # تحديث الجدول في جوجل شيت بالكامل بعد حذف أسطر التلميذ
+                                    ws_reports.clear()
+                                    ws_reports.update([headers] + new_records)
+                                    
+                                    st.cache_data.clear() # مسح الكاش لكي تظهر التغييرات فوراً
+                                    st.success(f"✅ تم بنجاح تصفير وحذف ({deleted_count}) سجل للتلميذ. يمكنه الآن الدخول والإرسال من جديد بكل حرية!")
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error("الجدول فارغ بالفعل.")
+                            except Exception as reset_err:
+                                st.error(f"حدث خطأ أثناء محاولة التصفير السحابي: {reset_err}")
+        else:
+            st.info("لا توجد بيانات كافية في السجلات لتفعيل ميزة التصفير.")
 
     with tab4:
         st.markdown("<div class='section-title'>⚙️ إعدادات الصيانة والأمان</div>", unsafe_allow_html=True)
-        st.info("لإدارة وحذف السجلات يرجى مراجعة ملف Google Sheets مباشرة لضمان حماية البيانات.")
+        st.info("تم دمج نظام التصفير التلقائي الذكي أعلاه ليوفر عليك عناء الحذف اليدوي من Google Sheets.")
 
 # --- واجهة التلميذ ---
 def student_space(df_students, df_reports, df_lessons):
@@ -340,7 +425,6 @@ def student_space(df_students, df_reports, df_lessons):
         
         if st.button("التحقق والولوج الآمن للمنصة 🚀", use_container_width=True):
             if sel_class != "---" and input_massar and input_birth:
-                # تنظيف نصوص المدخلات لمطابقة دقيقة
                 df_students[col_id] = df_students[col_id].astype(str).str.strip()
                 df_students[col_birth] = df_students[col_birth].astype(str).str.strip()
                 
@@ -351,7 +435,6 @@ def student_space(df_students, df_reports, df_lessons):
                 ]
                 if not matched_student.empty:
                     st.session_state.auth = True
-                    # حفظ الاسم ورقم مسار نظيفاً بدون فراغات خفية في الجلسة المفتوحة
                     st.session_state.user = {
                         "name": str(matched_student.iloc[0][col_name]).strip(), 
                         "class": sel_class,
@@ -366,10 +449,8 @@ def student_space(df_students, df_reports, df_lessons):
         student_massar = st.session_state.user.get('massar', '')
         st.success(f"🏫 مرحباً بالتلميذ(ة): **{student_name}** | رقم مسار: **{student_massar}** | القسم: **{st.session_state.user['class']}**")
         
-        # --- 🛠️ الميثاق المطور لفلترة السجلات بواسطة رقم مسار وإزالة فراغات الثغرة ---
         student_all_submissions = pd.DataFrame()
         if not df_reports.empty and 'رقم مسار' in df_reports.columns:
-            # تنظيف عمود مسار وعمود الدرس في السجلات للتأكد من المطابقة التامة
             df_reports['مسار_نظيف'] = df_reports['رقم مسار'].astype(str).str.strip().str.upper()
             df_reports['الدرس_نظيف'] = df_reports['الدرس'].astype(str).str.strip()
             student_all_submissions = df_reports[df_reports['مسار_نظيف'] == student_massar.upper()]
@@ -386,7 +467,6 @@ def student_space(df_students, df_reports, df_lessons):
         
         st.markdown("<div class='section-title'>📊 وضعيتك الحالية في السجل الرقمي:</div>", unsafe_allow_html=True)
         
-        # إذا وجدنا أي تسليم فعلي مسجل، نلغي جملة "لم تقم بإرسال أي دروس"
         if len(submitted_lessons) > 0:
             status_text = "📢 <b>حالة إرسال الفروض والدفاتر:</b><br>"
             for l_sub in ["الدرس 1", "الدرس 2", "الدرس 3"]:
@@ -398,7 +478,6 @@ def student_space(df_students, df_reports, df_lessons):
                         status_text += f"📉 نسبة إنجازك لـ <b>{l_sub}</b> هي: <span style='color:#e0f2fe; background:#1e3a8a; padding:2px 8px; border-radius:5px;'><b>{pct}</b></span><br>"
             st.markdown(f"<div class='status-box'>{status_text}</div>", unsafe_allow_html=True)
         else:
-            # لا تظهر هذه الرسالة إلا إذا كان السجل فارغاً تماماً وصحيحاً من الفراغات
             st.warning("لم تقم بإرسال أي دروس بعد. المرجو اختيار الدرس من التبويبات أسفله ورفع 13 صورة على الأقل.")
 
         lesson_tabs = st.tabs(["📘 المجزوءة / الدرس 1", "📗 المجزوءة / الدرس 2", "📙 المجزوءة / الدرس 3"])
@@ -407,7 +486,6 @@ def student_space(df_students, df_reports, df_lessons):
             with tab:
                 l_name = f"الدرس {i+1}"
                 
-                # منع التلميذ بشكل قاطع إذا تم رصد سجل للدرس الحالي
                 if l_name in submitted_lessons:
                     current_p = lesson_percentages.get(l_name, "N/A")
                     
@@ -422,7 +500,7 @@ def student_space(df_students, df_reports, df_lessons):
                         st.info(lesson_full_reports.get(l_name, "لا يوجد نص تقرير محفوظ."))
                 
                 else:
-                    st.markdown(f"#### 📸 مركز رفع صور دفتر مادة الرياضيات - {l_name}")
+                    st.markdown(f"#### 📸 centre de dépôt des cahiers - {l_name}")
                     saved_lesson_reference = get_lesson_ref(l_name, df_lessons)
                     
                     up_files = st.file_uploader(
@@ -467,12 +545,12 @@ def student_space(df_students, df_reports, df_lessons):
                                 
                                 if "بصمات_الصور" in df_live_reports.columns:
                                     if "رقم مسار" in df_live_reports.columns:
-                                        df_live_reports['مسار_نظيف'] = df_live_reports['رقم مسار'].astype(str).str.strip().str.upper()
+                                        df_live_reports['maskar_clean'] = df_live_reports['رقم مسار'].astype(str).str.strip().str.upper()
                                     else:
-                                        df_live_reports['مسار_نظيف'] = ""
+                                        df_live_reports['maskar_clean'] = ""
                                         
                                     for idx, row in df_live_reports.iterrows():
-                                        if str(row['مسار_نظيف']) == student_massar.upper():
+                                        if str(row['maskar_clean']) == student_massar.upper():
                                             continue
                                         saved_hashes_str = str(row['بصمات_الصور']).strip()
                                         if saved_hashes_str:
@@ -503,7 +581,7 @@ def student_space(df_students, df_reports, df_lessons):
                                             🚨 معيار صارم وحاسم ضد الغش: 
                                             قم بفحص الصور المرفوعة بصرياً بدقة. إذا لاحظت أن التلميذ قام برفع "صورتين أو أكثر مكررتين لنفس الصفحة تماماً" (سواء أخذ لقطة شاشة مرتين، أو صور نفس الصفحة من زاويتين مختلفتين لخداع النظام وزيادة عدد الصور لكي يصل لـ 14 صورة)، فقم فوراً بما يلي:
                                             1. اكتب تقريراً حازماً وموجزاً وتوبيخياً تخبره فيه بأنه تم رصد محاولة تكرار صور لخداع النظام ومخالفة ميثاق المادة.
-                                            2. ضع العبارة الأخيرة تماماً هكذا بدون زيادة أو نقصان:
+                                            2. وضع العبارة الأخيرة تماماً هكذا بدون زيادة أو نقصان:
                                             النسبة النهائية: 0%
                                             
                                             إذا كانت الصور كلها سليمة ومختلفة تتابعياً للدفتر، فنفذ المهام التربوية التالية:
@@ -526,7 +604,6 @@ def student_space(df_students, df_reports, df_lessons):
 
                                             hashes_to_save = ",".join(current_hashes)
 
-                                            # إضافة السجل المكون من 8 عناصر بالترتيب المطابق لملف الإكسيل
                                             live_sh.append_row([
                                                 datetime.now().strftime("%Y-%m-%d"),          # العمود A: التاريخ
                                                 student_massar.upper(),                       # العمود B: رقم مسار
