@@ -278,7 +278,7 @@ with st.sidebar:
     
     if st.session_state.auth:
         user_display = st.session_state.user.get('name', 'المستخدم')
-        st.success(f"🇲🇦 مرحباً بك: \n\n**{user_display}**")
+        st.success(f"🇲🇦 مرحباً ب: \n\n**{user_display}**")
         if st.session_state.role == "student":
             st.info(f"🏫 القسم: {st.session_state.user.get('class')}")
         st.divider()
