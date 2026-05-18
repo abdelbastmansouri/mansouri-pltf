@@ -67,7 +67,7 @@ def get_custom_bg():
     
     /* تحسين مظهر القائمة الجانبية باللون الكحلي الملكي للوزارة */
     [data-testid="stSidebar"] { 
-        background-color: rgba(26, 54, 93, 0.98) !important; 
+        background-color: rgba(26, 54, 93, 0.98); 
     }
     [data-testid="stSidebar"] * { color: white !important; }
     
