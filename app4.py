@@ -278,7 +278,7 @@ with st.sidebar:
     
     if st.session_state.auth:
         user_display = st.session_state.user.get('name', 'المستخدم')
-        st.success(f"🇲🇦 مرحباً ب: \n\n**{user_display}**")
+        st.success(f" مرحباً ب: \n\n**{user_display}**")
         if st.session_state.role == "student":
             st.info(f"🏫 القسم: {st.session_state.user.get('class')}")
         st.divider()
@@ -429,7 +429,7 @@ def student_space(df_students, df_lessons):
                 st.warning("⚠️ المرجو تعبئة كافة الحقول بدقة.")
                     
     else:
-        st.success(f"🏫 مرحباً بك يا تلميذ(ة): **{st.session_state.user['name']}** | القسم الفعلي: **{st.session_state.user['class']}**")
+        st.success(f"🏫 مرحباً ب التلميذ(ة): **{st.session_state.user['name']}** **{st.session_state.user['class']}**| من قسم : ")
         
         lesson_tabs = st.tabs(["📘 المجزوءة / الدرس 1", "📗 المجزوءة / الدرس 2", "📙 المجزوءة / الدرس 3"])
         
