@@ -316,7 +316,7 @@ def admin_space(df_students, df_reports, df_lessons):
     st.markdown("""
         <div style='background: linear-gradient(#008E8E, #1a365d 0%, #C72C48 100%); padding: 30px; border-radius: 15px; margin-bottom: 25px; color: white; border: 2px solid #C5A059;'>
             <h1 class='golden-title' style='font-size: 2.3rem;'>👨‍🏫 الفضاء الرقمي للتدقيق الإداري والتربوي</h1>
-            <p class='golden-sub'>مرحباً بك يا أستاذ عبد الباسط منصوري - تتبع ذكي ومقاومة شاملة لنسخ وتكرار دفاتر التلاميذ</p>
+            <p class='golden-sub'>مرحباً بك ذ.عبد الباسط منصوري - تتبع ذكي لمراقبة وتصحيح دفاترالتلاميذ</p>
         </div>
     """, unsafe_allow_html=True)
     
@@ -394,7 +394,7 @@ def student_space(df_students, df_lessons):
     st.markdown("""
         <div style='background: linear-gradient(135deg, #10b981 0%, #1a365d 100%); padding: 35px; border-radius: 15px; margin-bottom: 25px; text-align: center; border: 2px solid #C5A059;'>
             <h2 class='golden-title' style='font-size: 2.5rem;'>🇲🇦 الفضاء الرقمي للتلميذات والتلاميذ</h2>
-            <p class='golden-sub'>منصة الأمان والتدقيق الفوري للدفاتر المدرسية لضمان التميز الأكاديمي</p>
+            <p class='golden-sub'منصة ذ.منصوري للتدقيق الفوري للدفاتر المدرسية لتلاميذ ج,ع,خ,ف مدعومة الذكاء الاصطناعي (AI) </p>
         </div>
     """, unsafe_allow_html=True)
     
@@ -467,7 +467,7 @@ def student_space(df_students, df_lessons):
                                     """
                                 else:
                                     prompt_instructions = f"""
-                                    أنت مساعد أستاذ رياضيات عبقري ومراقب صارم جداً مكلف بكشف الغش وتدقيق الدفاتر بالثانوية التأهلية. 
+                                    أنت مساعد أستاذ الرياضيات عبد الباسط منصوري ذكي ومراقب صارم جداً مكلف بكشف الغش وتدقيق الدفاتر بالثانوية التأهلية. 
                                     التلميذ {st.session_state.user['name']} (القسم: {st.session_state.user['class']}) أرسل صور دفتره لدرس ({l_name}).
 
                                     المرجع والمخطط الملزم الذي حدده الأستاذ لك هو الرابط أو التفاصيل التالية:
