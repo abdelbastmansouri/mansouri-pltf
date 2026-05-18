@@ -394,7 +394,7 @@ def student_space(df_students, df_reports, df_lessons):
             st.markdown(f"<div class='status-box'>{status_text}</div>", unsafe_allow_html=True)
         else:
             # لا تظهر هذه الرسالة إلا إذا كان السجل فارغاً تماماً وصحيحاً من الفراغات
-            st.warning("لم تقم بإرسال أي دروس بعد. المرجو اختيار الدرس من التبويبات أسفله ورفع 14 صورة على الأقل.")
+            st.warning("لم تقم بإرسال أي دروس بعد. المرجو اختيار الدرس من التبويبات أسفله ورفع 13 صورة على الأقل.")
 
         lesson_tabs = st.tabs(["📘 المجزوءة / الدرس 1", "📗 المجزوءة / الدرس 2", "📙 المجزوءة / الدرس 3"])
         
@@ -421,7 +421,7 @@ def student_space(df_students, df_reports, df_lessons):
                     saved_lesson_reference = get_lesson_ref(l_name, df_lessons)
                     
                     up_files = st.file_uploader(
-                        f"اختر صور صفحات الدفتر لـ {l_name} (🚨 تنبيه: يشترط تحميل 14 صورة على الأقل)", 
+                        f"اختر صور صفحات الدفتر لـ {l_name} (🚨 تنبيه: يشترط تحميل 13 صورة على الأقل)", 
                         accept_multiple_files=True, 
                         key=f"up_{l_name}", 
                         type=['jpg','jpeg','png']
@@ -429,7 +429,7 @@ def student_space(df_students, df_reports, df_lessons):
                     
                     if st.button(f"بدء المعالجة والتدقيق الفوري لـ {l_name}", key=f"btn_{l_name}"):
                         if up_files:
-                            if len(up_files) < 14:
+                            if len(up_files) < 13:
                                 st.error(f"⚠️ **خطأ في معايير قبول الدفتر:** لقد قمت برفع ({len(up_files)}) صور فقط! ميثاق المادة يشترط رفع **14 صورة على الأقل** للدرس لضمان تدقيق المحتوى كاملاً.")
                             else:
                                 with st.spinner("🔄 جاري التحقق الفوري من سجلاتك وفحص جودة الصور..."):
