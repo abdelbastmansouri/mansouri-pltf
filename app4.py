@@ -296,7 +296,7 @@ with st.sidebar:
 # --- 3. واجهة الأستاذ ---
 def admin_space(df_students, df_reports, df_lessons):
     st.markdown("""
-        <div style='background: linear-gradient(##008E8E, #1a365d 0%, #FF0921 100%); padding: 30px; border-radius: 15px; margin-bottom: 25px; color: white; border: 2px solid #C5A059;'>
+        <div style='background: linear-gradient(#008E8E, #1a365d 0%, #C72C48 100%); padding: 30px; border-radius: 15px; margin-bottom: 25px; color: white; border: 2px solid #C5A059;'>
             <h1 class='golden-title' style='font-size: 2.3rem;'>👨‍🏫 الفضاء الرقمي للتدقيق الإداري والتربوي</h1>
             <p class='golden-sub'>مرحباً بك يا أستاذ عبد الباسط المنصوري - تتبع ذكي ومقاومة شاملة لنسخ وتكرار دفاتر التلاميذ</p>
         </div>
@@ -487,7 +487,7 @@ elif st.session_state.role == "admin":
         st.markdown("<div class='section-title'>🔑 فضاء الأستاذ والإدارة التربوية</div>", unsafe_allow_html=True)
         admin_pwd = st.text_input("الرجاء إدخال كلمة سر الولوج الإدارية المخصصة:", type="password")
         if st.button("تأكيد الهوية 👨‍🏫", use_container_width=True):
-            if admin_pwd == "1234":
+            if admin_pwd == "Abdo-Abdo":
                 st.session_state.auth = True
                 st.session_state.user = {"name": "الأستاذ عبد الباسط المنصوري"}
                 st.success("مرحباً بك يا أستاذ!")
