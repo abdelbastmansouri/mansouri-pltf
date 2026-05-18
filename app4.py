@@ -83,7 +83,7 @@ def get_custom_bg():
 
     /* العناوين والنصوص التربوية باللون الأزرق الملكي الغامق */
     h1, h2, h3, label, .stMarkdown p { 
-        color: #1a365d !important; 
+        color: #ED7F10 !important; 
         font-weight: bold !important; 
     }
     
