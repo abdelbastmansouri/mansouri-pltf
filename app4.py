@@ -155,6 +155,7 @@ def get_custom_bg():
     }
     </style>
     """
+
 st.markdown(get_custom_bg(), unsafe_allow_html=True)
 
 # تفعيل الربط السحابي الآمن مع مفتاح Gemini الجديد
@@ -286,19 +287,16 @@ with st.sidebar:
             for key in list(st.session_state.keys()): del st.session_state[key]
             st.rerun()
     else:
-        # تطبيق التنسيق والخط العربي واللون الذهبي على "توجيه المسار الرقمي"
-        # استخدام أيقونة SVG أو ترميز HTML نقي يمنع المتصفح من ترجمته إلى كلمة "كيبورد"
         st.markdown("""
             <p style='color: #FFD700 !important; font-size: 1.3rem; text-shadow: 1px 1px 2px black; font-weight: bold; margin-bottom:10px; display: flex; align-items: center; gap: 8px;'>
                 <span style='font-size: 1.5rem;'>⚙️</span> توجيه المسار الرقمي:
             </p>
         """, unsafe_allow_html=True)
         
-        # لمنع ظهور النصوص بشكل مزدوج أو مشوه عند الترجمة، نستخدم نصوصاً واضحة داخل الراديو
         menu = st.radio(
             label="اختر الفضاء المستهدف:", 
             options=["فضاء التلميذات والتلاميذ", "فضاء الإدارة والأستاذ"],
-            label_visibility="collapsed" # يخفي عنوان الراديو الفرعي لتفادي التكرار
+            label_visibility="collapsed" 
         )
         st.session_state.role = "student" if "التلميذ" in menu else "admin"
 
@@ -379,13 +377,12 @@ def admin_space(df_students, df_reports, df_lessons):
         st.markdown("<div class='section-title'>⚙️ إعدادات الصيانة والأمان</div>", unsafe_allow_html=True)
         st.info("لإدارة وحذف السجلات يرجى مراجعة ملف Google Sheets مباشرة لضمان حماية البيانات.")
 
-# --- 4. واجهة التلميذ الاحترافية والأمنة (بالحفاظ على الخصوصية) ---
-def student_space(df_students, df_lessons):
-    # تطبيق التنسيق والخط العربي واللون الذهبي على لوحة فضاء التلميذات والتلاميذ
+# --- 4. واجهة التلميذ الاحترافية والأمنة ---
+def student_space(df_students, df_lessons, df_reports):
     st.markdown("""
         <div style='background: linear-gradient(135deg, #10b981 0%, #1a365d 100%); padding: 35px; border-radius: 15px; margin-bottom: 25px; text-align: center; border: 2px solid #C5A059;'>
             <h2 class='golden-title' style='font-size: 2.5rem;'>🇲🇦 الفضاء الرقمي للتلميذات والتلاميذ</h2>
-            <p class='golden-sub'منصة ذ.منصوري للتدقيق الفوري للدفاتر المدرسية لتلاميذ ج,ع,خ,ف مدعومة الذكاء الاصطناعي (AI) </p>
+            <p class='golden-sub'>منصة ذ.منصوري للتدقيق الفوري للدفاتر المدرسية لتلاميذ ج,ع,خ,ف مدعومة بالذكاء الاصطناعي (AI) </p>
         </div>
     """, unsafe_allow_html=True)
     
@@ -400,7 +397,6 @@ def student_space(df_students, df_lessons):
     col_birth = 'تاريخ الإزدياد' 
 
     if not st.session_state.auth:
-        # تطبيق التنسيق المطور واللون الذهبي العتيق على عنوان "تسجيل الدخول الآمن لمنظومة التدقيق"
         st.markdown("<div class='section-title'>🔑 تسجيل الدخول الآمن لمنظومة التدقيق</div>", unsafe_allow_html=True)
         
         sel_class = st.selectbox("الرجاء تحديد قسمك الفعلي:", ["---"] + df_students[col_class].unique().tolist())
@@ -429,7 +425,7 @@ def student_space(df_students, df_lessons):
                 st.warning("⚠️ المرجو تعبئة كافة الحقول بدقة.")
                     
     else:
-        st.success(f"🏫 مرحباً ب التلميذ(ة): **{st.session_state.user['name']}** **{st.session_state.user['class']}**|: من قسم  ")
+        st.success(f"🏫 مرحباً بالتلميذ(ة): **{st.session_state.user['name']}** | من قسم: **{st.session_state.user['class']}**")
         
         lesson_tabs = st.tabs(["📘 المجزوءة / الدرس 1", "📗 المجزوءة / الدرس 2", "📙 المجزوءة / الدرس 3"])
         
@@ -444,96 +440,92 @@ def student_space(df_students, df_lessons):
                 if st.button(f"بدء المعالجة والتدقيق الفوري لـ {l_name}", key=f"btn_{l_name}"):
                     if up_files:
                         
-                        # 🔍 1. التحقق الذكي المسبق: هل التلميذ أرسل تقريراً مسبقاً لهذا الدرس المعين؟
-                        student_name = st.session_state.user['name'] # اسم التلميذ الحالي من الجلسة
+                        # 🔍 1. التحقق الذكي المسبق لمنع تكرار الإرسال
+                        student_name = st.session_state.user['name']
                         
-                # فحص جدول df_reports (تأكد من مطابقة أسماء الأعمدة 'الاسم' و 'الدرس' مع جدولك)
-                    duplicate_check = df_reports[
-                    (df_reports['الاسم'] == student_name) & 
-                    (df_reports['الدرس'] == l_name)
-                    ]
-                    
-                    if not duplicate_check.empty:
-                        # 🛑 إذا وجد النظام تقريراً سابقاً، يتم إيقاف العملية فوراً وإظهار رسالة التنبيه المخصصة
-                        st.warning(
-                            f"⚠️ **تنبيه هام:** لقد أرسلت مسبقاً صوراً لـ ({l_name})! "
-                            "لا يمكنك الإرسال مرتين قبل إزالة التقرير الأول. "
-                            "الرجاء التواصل مع الأستاذ ليقوم بإزالة تقرير الدرس الأول، بعد ذلك يمكنك إعادة الإرسال."
-                        )
-                    else:
-                        # ✅ إذا كان السجل خالياً، يستمر البرنامج في تفعيل الذكاء الاصطناعي بشكل طبيعي
-                        with st.spinner("🔄 جاري سحب المرجع التربوي السحابي الثابت وفحص الدفتر..."):
-                            try:
-                                clean_ref = saved_lesson_reference.strip()
-                                is_ref_empty = "N/A" in clean_ref or clean_ref == "" or "لا توجد ملاحظات" in clean_ref
-                                
-                                if is_ref_empty:
-                                    prompt_instructions = f"""
-                                    أنت مساعد أستاذ رياضيات عبقري ومراقب تربوي محفز بالثانوية التأهلية المغربية.
-                                    التلميذ {st.session_state.user['name']} (القسم: {st.session_state.user['class']}) أرسل صور واجباته لدرس ({l_name}).
-
-                                    قم بتدقيق الصور بناءً على المعارف القياسية المقررة في المنهاج المغربي لمستوى الجذع المشترك علمي (TCS) لدرس {l_name}.
-                                    تأكد من وجود مجهود فعلي وحلول للتمارين، وصغ تقريراً مشجعاً يوضح الفقرات المكتوبة وصحة الحلول الرياضية.
-                                    """
-                                else:
-                                    prompt_instructions = f"""
-                                    أنت مساعد أستاذ الرياضيات عبد الباسط منصوري ذكي ومراقب صارم جداً مكلف بكشف الغش وتدقيق الدفاتر بالثانوية التأهلية. 
-                                    التلميذ {st.session_state.user['name']} (القسم: {st.session_state.user['class']}) أرسل صور دفتره لدرس ({l_name}).
+                        duplicate_check = pd.DataFrame()
+                        if not df_reports.empty and 'الاسم' in df_reports.columns and 'الدرس' in df_reports.columns:
+                            duplicate_check = df_reports[
+                                (df_reports['الاسم'] == student_name) & 
+                                (df_reports['الدرس'] == l_name)
+                            ]
+                        
+                        if not duplicate_check.empty:
+                            st.warning(
+                                f"⚠️ **تنبيه هام:** لقد أرسلت مسبقاً صوراً لـ ({l_name})! "
+                                "لا يمكنك إرسال التقرير مرتين قبل إزالة التقرير الأول. "
+                                "الرجاء التواصل مع الأستاذ ليقوم بإزالة تقرير الدرس الأول، بعد ذلك يمكنك إعادة الإرسال."
+                            )
+                        else:
+                            # ✅ إذا كان السجل خالياً، يستمر البرنامج في تفعيل الذكاء الاصطناعي بشكل طبيعي
+                            with st.spinner("🔄 جاري سحب المرجع التربوي السحابي الثابت وفحص الدفتر..."):
+                                try:
+                                    clean_ref = saved_lesson_reference.strip()
+                                    is_ref_empty = "N/A" in clean_ref or clean_ref == "" or "لا توجد ملاحظات" in clean_ref
                                     
-                                    المرجع والمخطط الملزم الذي حدده الأستاذ لك هو الرابط أو التفاصيل التالية:
-                                    \"\"\"{saved_lesson_reference}\"\"\"
-      
-                                    المهام والقيود الإلزامية المطلوبة منك أثناء التدقيق:
-                                    1. اعتمد البنية العلمية والفقرات الأساسية المعتمدة في هذا الدرس المرجعي المرفق في الرابط (مثل تعاريف، خاصيات، وأنشطة حساب المثلثات للجذع المشترك علمي).
-                                    2. قارن العناوين والفقرات المكتوبة في الدفتر بخط يد التلميذ مع محتوى الدرس للتأكد من نقل الدرس كاملاً وبأمانة وبدون نقص.
-                                    3. راجع التمارين التطبيقية المنجزة وتأكد من صحتها الرياضية.
-                                    4. نسبة كتابة الدرس بلون عريض
-                                    صغ الرد باللغة العربية بأسلوب تربوي رصين ومباشر، وابدأ بالتدقيق فوراً وبدون أي اعتذارات عن الرابط.
-                                    """
-                     # هنا يستكمل كود الإرسال إلى الجيميني وحفظ التقرير الجديد...
-                            except Exception as e:
-                                st.error(f"حدث خطأ أثناء إعداد التدقيق: {e}")
-                            else:
-                                st.error("الرجاء تحميل صور الدرس أولاً.")
-                                
-                                model = genai.GenerativeModel("gemini-2.5-flash")
-                                imgs = [Image.open(f) for f in up_files]
-                                res = model.generate_content([prompt_instructions, *imgs])
-                                
-                                client = get_gspread_client()
-                                sh = client.open("les classes").worksheet("Reports")
-                                sh.append_row([datetime.now().strftime("%Y-%m-%d"), st.session_state.user['name'], st.session_state.user['class'], l_name, res.text, "تم التدقيق بنجاح"])
-                                st.markdown("### 📋التقرير الرقمي لتدقيق الدفتر المستلم")
-                                st.info(res.text)
-                                st.success("تم حفظ التقرير التربوي في سجلات الأستاذ السحابية بنجاح ✅")
-                            
-                            except Exception as gemini_err:
-                            st.error(f"❌ حدث خطأ أثناء فحص الدفتر برمجياً: {gemini_err}")
+                                    if is_ref_empty:
+                                        prompt_instructions = f"""
+                                        أنت مساعد أستاذ رياضيات عبقري ومراقب تربوي محفز بالثانوية التأهلية المغربية.
+                                        التلميذ {st.session_state.user['name']} (القسم: {st.session_state.user['class']}) أرسل صور واجباته لدرس ({l_name}).
+
+                                        قم بتدقيق الصور بناءً على المعارف القياسية المقررة في المنهاج المغربي لمستوى الجذع المشترك علمي (TCS) لدرس {l_name}.
+                                        تأكد من وجود مجهود فعلي وحلول للتمارين، وصغ تقريراً مشجعاً يوضح الفقرات المكتوبة وصحة الحلول الرياضية.
+                                        """
+                                    else:
+                                        prompt_instructions = f"""
+                                        أنت مساعد أستاذ الرياضيات عبد الباسط منصوري ذكي ومراقب صارم جداً مكلف بكشف الغش وتدقيق الدفاتر بالثانوية التأهلية. 
+                                        التلميذ {st.session_state.user['name']} (القسم: {st.session_state.user['class']}) أرسل صور دفتره لدرس ({l_name}).
+                                        
+                                        المرجع والمخطط الملزم الذي حدده الأستاذ لك هو الرابط أو التفاصيل التالية:
+                                        \"\"\"{saved_lesson_reference}\"\"\"
+          
+                                        المهام والقيود الإلزامية المطلوبة منك أثناء التدقيق:
+                                        1. اعتمد البنية العلمية والفقرات الأساسية المعتمدة في هذا الدرس المرجعي المرفق في الرابط (مثل تعاريف، خاصيات، وأنشطة حساب المثلثات للجذع المشترك علمي).
+                                        2. قارن العناوين والفقرات المكتوبة في الدفتر بخط يد التلميذ مع محتوى الدرس للتأكد من نقل الدرس كاملاً وبأمانة وبدون نقص.
+                                        3. راجع التمارين التطبيقية المنجزة وتأكد من صحتها الرياضية.
+                                        4. نسبة كتابة الدرس بلون عريض
+                                        صغ الرد باللغة العربية بأسلوب تربوي رصين ومباشر، وابدأ بالتدقيق فوراً وبدون أي اعتذارات عن الرابط.
+                                        """
+                                    
+                                    # تشغيل موديل الجيميني
+                                    model = genai.GenerativeModel("gemini-2.5-flash")
+                                    imgs = [Image.open(f) for f in up_files]
+                                    res = model.generate_content([prompt_instructions, *imgs])
+                                    
+                                    # حفظ السجل الجديد في جوجل شيت
+                                    client = get_gspread_client()
+                                    sh = client.open("les classes").worksheet("Reports")
+                                    sh.append_row([datetime.now().strftime("%Y-%m-%d"), st.session_state.user['name'], st.session_state.user['class'], l_name, res.text, "تم التدقيق بنجاح"])
+                                    
+                                    st.markdown("### 📋التقرير الرقمي لتدقيق الدفتر المستلم")
+                                    st.info(res.text)
+                                    st.success("تم حفظ التقرير التربوي في سجلات الأستاذ السحابية بنجاح ✅")
+                                    
+                                except Exception as gemini_err:
+                                    st.error(f"❌ حدث خطأ أثناء فحص الدفتر برمجياً: {gemini_err}")
                     else:
                         st.warning("⚠️ المرجو تزويد المنصة بصور الدفتر أولاً.")                        
-                        # --- 5. منطق توزيع مسارات العرض ---
-                        if st.session_state.role == "student":
-                            student_space(df_students, df_lessons)
-                        elif st.session_state.role == "admin":
-                            if not st.session_state.auth:
-                                st.markdown("<div class='section-title'>🔑 فضاء الأستاذ والإدارة التربوية</div>", unsafe_allow_html=True)
-                                admin_pwd = st.text_input("الرجاء إدخال كلمة سر الولوج الإدارية المخصصة:", type="password")
-                             # 🔐 قراءة كلمة المرور بأمان مطلق من Streamlit Secrets   
-                                if st.button("تأكيد الهوية 👨‍🏫", use_container_width=True):
-                                 # 🔐 قراءة كلمة المرور بأمان مطلق من Streamlit Secrets   
-                                    try:
-                                        correct_password = st.secrets["credentials"]["prof_password"]
-                                        
-                                        if admin_pwd == correct_password:
-                                            st.session_state.auth = True
-                                            st.session_state.user = {"name": "الأستاذ عبد الباسط المنصوري"}
-                                            st.success("مرحباً بك يا أستاذ!")
-                                            st.rerun()
-                                        else: 
-                                            st.error("❌ رمز المرور الإداري غير صحيح.")
-                             # رسالة أمنية مشفرة تظهر لك فقط إذا نسيت ضبط الإعدادات في المنصة               
-                                    except KeyError:
-                                        
-                                        st.error("⚙️ خطأ في النظام: لم يتم ضبط مفاتيح الحماية بنجاح في لوحة التحكم.")
-                                    else: 
-                                        admin_space(df_students, df_reports, df_lessons)
+
+# --- 5. منطق توزيع مسارات العرض الرئيسي ---
+if st.session_state.role == "student":
+    student_space(df_students, df_lessons, df_reports)
+elif st.session_state.role == "admin":
+    if not st.session_state.auth:
+        st.markdown("<div class='section-title'>🔑 فضاء الأستاذ والإدارة التربوية</div>", unsafe_allow_html=True)
+        admin_pwd = st.text_input("الرجاء إدخال كلمة سر الولوج الإدارية المخصصة:", type="password")
+        
+        if st.button("تأكيد الهوية 👨‍🏫", use_container_width=True):
+            try:
+                correct_password = st.secrets["credentials"]["prof_password"]
+                
+                if admin_pwd == correct_password:
+                    st.session_state.auth = True
+                    st.session_state.user = {"name": "الأستاذ عبد الباسط المنصوري"}
+                    st.success("مرحباً بك يا أستاذ!")
+                    st.rerun()
+                else: 
+                    st.error("❌ رمز المرور الإداري غير صحيح.")
+            except KeyError:
+                st.error("⚙️ خطأ في النظام: لم يتم ضبط مفاتيح الحماية بنجاح في لوحة التحكم.")
+    else: 
+        admin_space(df_students, df_reports, df_lessons)
