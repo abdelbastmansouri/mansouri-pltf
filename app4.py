@@ -429,7 +429,7 @@ def student_space(df_students, df_lessons):
                 st.warning("⚠️ المرجو تعبئة كافة الحقول بدقة.")
                     
     else:
-        st.success(f"🏫 مرحباً ب التلميذ(ة): **{st.session_state.user['name']}** **{st.session_state.user['class']}**| من قسم : ")
+        st.success(f"🏫 مرحباً ب التلميذ(ة): **{st.session_state.user['name']}** **{st.session_state.user['class']}**|: من قسم  ")
         
         lesson_tabs = st.tabs(["📘 المجزوءة / الدرس 1", "📗 المجزوءة / الدرس 2", "📙 المجزوءة / الدرس 3"])
         
