@@ -491,15 +491,26 @@ def student_space(df_students, df_lessons):
 # --- 5. منطق توزيع مسارات العرض ---
 if st.session_state.role == "student":
     student_space(df_students, df_lessons)
-elif st.session_state.role == "admin":
+    elif st.session_state.role == "admin":
     if not st.session_state.auth:
         st.markdown("<div class='section-title'>🔑 فضاء الأستاذ والإدارة التربوية</div>", unsafe_allow_html=True)
         admin_pwd = st.text_input("الرجاء إدخال كلمة سر الولوج الإدارية المخصصة:", type="password")
+        
         if st.button("تأكيد الهوية 👨‍🏫", use_container_width=True):
-            if admin_pwd == "Abdo-Abdo":
-                st.session_state.auth = True
-                st.session_state.user = {"name": "الأستاذ عبد الباسط المنصوري"}
-                st.success("مرحباً بك يا أستاذ!")
-                st.rerun()
-            else: st.error("❌ رمز المرور الإداري غير صحيح.")
-    else: admin_space(df_students, df_reports, df_lessons)
+            # 🔐 قراءة كلمة المرور بأمان مطلق من Streamlit Secrets
+            try:
+                correct_password = st.secrets["credentials"]["prof_password"]
+                
+                if admin_pwd == correct_password:
+                    st.session_state.auth = True
+                    st.session_state.user = {"name": "الأستاذ عبد الباسط المنصوري"}
+                    st.success("مرحباً بك يا أستاذ!")
+                    st.rerun()
+                else: 
+                    st.error("❌ رمز المرور الإداري غير صحيح.")
+                    
+            except KeyError:
+                # رسالة أمنية مشفرة تظهر لك فقط إذا نسيت ضبط الإعدادات في المنصة
+                st.error("⚙️ خطأ في النظام: لم يتم ضبط مفاتيح الحماية بنجاح في لوحة التحكم.")
+    else: 
+        admin_space(df_students, df_reports, df_lessons)
