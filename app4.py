@@ -106,9 +106,9 @@ def get_custom_bg():
         box-shadow: 0 4px 12px rgba(197, 160, 89, 0.4) !important;
     }
     
-    /* 🛠️ الحل الذكي: استهداف أزرار القائمة الجانبية فقط وحمايتها من الاختفاء والترجمة */
+    /* 🛠️ تطبيق فكرة التمويه اللوني لإخفاء الكلمات المشوهة تماماً عند حوم الفأرة */
     
-    /* إخفاء النص المترجم (كيبورد) فقط دون إخفاء الزر بالكامل */
+    /* إخفاء نصوص الأزرار الأصلية وجعلها شفافة */
     [data-testid="stSidebarCollapseButton"] button, 
     [data-testid="stSidebar"] button[data-testid="stBaseButton-headerNoPadding"] {
         color: transparent !important;
@@ -117,13 +117,13 @@ def get_custom_bg():
         position: relative !important;
     }
     
-    /* منع المتصفح من إظهار التلميح عند الحوم (Hover) فوق زر القائمة فقط */
+    /* إخفاء الأيقونة المدمجة المتأثرة بالترجمة */
     [data-testid="stSidebarCollapseButton"] button svg,
     [data-testid="stSidebar"] button[data-testid="stBaseButton-headerNoPadding"] svg {
-        opacity: 0 !important; /* إخفاء الأيقونة الأصلية المتأثرة بالترجمة */
+        opacity: 0 !important;
     }
 
-    /* رسم سهم الإغلاق اليدوي الثابت (عندما تكون القائمة مفتوحة) باللون الذهبي */
+    /* رسم سهم الإغلاق اليدوي الثابت والمستقر باللون الذهبي (القائمة مفتوحة) */
     [data-testid="stSidebar"] button[data-testid="stBaseButton-headerNoPadding"]::before {
         content: "❮" !important; 
         color: #FFD700 !important; 
@@ -136,7 +136,7 @@ def get_custom_bg():
         visibility: visible !important;
     }
 
-    /* رسم سهم الفتح اليدوي الثابت (عندما تكون القائمة مغلقة) باللون الكحلي */
+    /* رسم سهم الفتح اليدوي الثابت والمستقر باللون الكحلي (القائمة مغلقة) */
     [data-testid="stSidebarCollapseButton"] button::before {
         content: "❯" !important; 
         color: #1a365d !important; 
@@ -147,6 +147,19 @@ def get_custom_bg():
         top: 50% !important;
         transform: translate(-50%, -50%) !important;
         visibility: visible !important;
+    }
+
+    /* صبغة التمويه عند تمرير الفأرة ليموت النص المشوه مع لون الخلفية المباشرة له */
+    [data-testid="stSidebarCollapseButton"] button:hover,
+    [data-testid="stSidebarCollapseButton"] button:hover * {
+        color: #f5f7fa !important; /* يتطابق مع بياض خلفية الصفحة الفاتحة */
+        background-color: transparent !important;
+    }
+
+    [data-testid="stSidebar"] button[data-testid="stBaseButton-headerNoPadding"]:hover,
+    [data-testid="stSidebar"] button[data-testid="stBaseButton-headerNoPadding"]:hover * {
+        color: #1a365d !important; /* يتطابق مع كحلي خلفية القائمة الجانبية */
+        background-color: transparent !important;
     }
     </style>
     """
