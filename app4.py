@@ -106,17 +106,31 @@ def get_custom_bg():
         box-shadow: 0 4px 12px rgba(197, 160, 89, 0.4) !important;
     }
     
-    /* إخفاء النص المشوه الناتج عن الترجمة التلقائية لأيقونة القائمة الجانبية */
-    [data-testid="stSidebarCollapseButton"] button {
+    /* 🛠️ حل مشكلة الكلمات المشوهة (keyboard_double_arrow) في حالتي الفتح والإغلاق */
+    [data-testid="stSidebarCollapseButton"] button, 
+    [data-testid="stSidebar"] button {
         color: transparent !important;
         font-size: 0px !important;
     }
 
-    /* إضافة سهم رسومي نقي وثابت لا يتأثر بالترجمة */
+    /* سهم الإغلاق (عندما تكون القائمة مفتوحة) يظهر باللون الذهبي المتناسق */
+    [data-testid="stSidebar"] button::before {
+        content: "❮" !important; 
+        color: #FFD700 !important; 
+        font-size: 18px !important;
+        font-weight: bold !important;
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+    }
+
+    /* سهم الفتح (عندما تكون القائمة مغلقة) يظهر باللون الكحلي */
     [data-testid="stSidebarCollapseButton"] button::before {
         content: "❯" !important; 
         color: #1a365d !important; 
-        font-size: 20px !important;
+        font-size: 18px !important;
+        font-weight: bold !important;
         position: absolute;
         left: 50%;
         top: 50%;
