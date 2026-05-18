@@ -491,7 +491,7 @@ def student_space(df_students, df_lessons):
 # --- 5. منطق توزيع مسارات العرض ---
 if st.session_state.role == "student":
     student_space(df_students, df_lessons)
-    elif st.session_state.role == "admin":
+elif st.session_state.role == "admin":
     if not st.session_state.auth:
         st.markdown("<div class='section-title'>🔑 فضاء الأستاذ والإدارة التربوية</div>", unsafe_allow_html=True)
         admin_pwd = st.text_input("الرجاء إدخال كلمة سر الولوج الإدارية المخصصة:", type="password")
