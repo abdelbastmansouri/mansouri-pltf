@@ -105,6 +105,7 @@ def get_custom_bg():
         color: #1a365d !important;
         box-shadow: 0 4px 12px rgba(197, 160, 89, 0.4) !important;
     }
+    
     /* إخفاء النص المشوه الناتج عن الترجمة التلقائية لأيقونة القائمة الجانبية */
     [data-testid="stSidebarCollapseButton"] button {
         color: transparent !important;
@@ -113,8 +114,8 @@ def get_custom_bg():
 
     /* إضافة سهم رسومي نقي وثابت لا يتأثر بالترجمة */
     [data-testid="stSidebarCollapseButton"] button::before {
-        content: "❯" !important; /* أو يمكنك استخدام "☰" إذا كنت تفضل شكل القائمة */
-        color: #1a365d !important; /* لون السهم ليناسب التصميم الملكي للمنصة */
+        content: "❯" !important; 
+        color: #1a365d !important; 
         font-size: 20px !important;
         position: absolute;
         left: 50%;
