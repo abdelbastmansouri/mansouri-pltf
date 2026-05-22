@@ -176,9 +176,9 @@ def load_data():
                 if col in ["إسم", "اسم", "اسم التلميذ", "إسم التلميذ"]:
                     df_reports = df_reports.rename(columns={col: "الاسم"})
         else:
-            df_reports = pd.DataFrame(columns=["التاريخ", "رقم مسار", "الاسم", "القسم", "الدرس", "التقرير", "النسبة", "بصمات_الصور"])
+            df_reports = pd.DataFrame(columns=["التاريخ", "رقم مسار", "الاسم", "القسم", "الدرس", "التقرير", "النسبة", "بصمات_الصور", "بصمة_الخط"])
     except:
-        df_reports = pd.DataFrame(columns=["التاريخ", "رقم مسار", "الاسم", "القسم", "الدرس", "التقرير", "النسبة", "بصمات_الصور"])
+        df_reports = pd.DataFrame(columns=["التاريخ", "رقم مسار", "الاسم", "القسم", "الدرس", "التقرير", "النسبة", "بصمات_الصور", "بصمة_الخط"])
         
     try:
         lessons_worksheet = sh.worksheet("Lessons")
@@ -312,22 +312,18 @@ def admin_space(df_students, df_reports, df_lessons):
             
         st.divider()
         
-        # --- 🛠️ لوحة تصفير وإعادة تعيين معطيات تلميذ معين تلبة لطلبك المباشر ---
         st.markdown("<div class='section-title'>🗑️ لوحة الإلغاء والتصفير (منح فرصة ثانية للتلميذ)</div>", unsafe_allow_html=True)
         st.write("يمكنك من هنا اختيار تلميذ معين لحذف تقاريره من قاعدة البيانات ليعيد المحاولة والإرسال:")
         
         if not df_reports.empty and 'القسم' in df_reports.columns:
-            # 1. اختيار القسم
             available_classes = ["---"] + sorted(df_reports['القسم'].dropna().unique().tolist())
             chosen_class = st.selectbox("1️⃣ اختر قسم التلميذ المراد تصفيره:", available_classes, key="reset_class_select")
             
             if chosen_class != "---":
-                # فحص التلاميذ الذين أرسلوا بالفعل من هذا القسم
                 df_filtered_class = df_reports[df_reports['القسم'] == chosen_class]
                 
-                # بناء مصفوفة تحتوي على (الاسم - رقم مسار) لمنع التشابه
                 student_options = []
-                student_mapping = {} # لربط الخيار المكتوب برقم مسار للتأكد التام
+                student_mapping = {}
                 
                 for idx, r in df_filtered_class.iterrows():
                     m_id = str(r.get('رقم مسار', '')).strip().upper()
@@ -337,16 +333,12 @@ def admin_space(df_students, df_reports, df_lessons):
                         student_options.append(display_text)
                         student_mapping[display_text] = m_id
                 
-                # 2. اختيار التلميذ المستهدف
                 chosen_student_profile = st.selectbox("2️⃣ اختر التلميذ المستهدف بالتصفير:", ["---"] + student_options, key="reset_student_select")
-                
-                # 3. اختيار الدرس المستهدف أو تصفير الكل
                 target_lesson_to_reset = st.selectbox("3️⃣ حدد النطاق المراد حذفه وتصفيره:", ["كل الدروس", "الدرس 1", "الدرس 2", "الدرس 3"], key="reset_lesson_select")
                 
                 if chosen_student_profile != "---":
                     target_massar_id = student_mapping[chosen_student_profile]
                     
-                    # زر التأكيد النهائي للحذف
                     if st.button("🔥 تصفير وإعادة تعيين معطيات التلميذ الآن", use_container_width=True):
                         with st.spinner("جاري الاتصال السحابي وإلغاء القيود..."):
                             try:
@@ -359,31 +351,27 @@ def admin_space(df_students, df_reports, df_lessons):
                                     headers = all_rows[0]
                                     old_records = all_rows[1:]
                                     
-                                    # بناء المصفوفة الجديدة مع استثناء السجل المستهدف
                                     new_records = []
                                     deleted_count = 0
                                     
                                     for row in old_records:
-                                        # التأكد من طول الصف لعدم حدوث خطأ في الفهرسة
                                         if len(row) >= 5:
-                                            row_massar = str(row[1]).strip().upper()    # العمود B هو رقم مسار
-                                            row_lesson = str(row[4]).strip()            # العمود E هو الدرس
+                                            row_massar = str(row[1]).strip().upper()
+                                            row_lesson = str(row[4]).strip()
                                             
-                                            # شرط المطابقة
                                             match_massar = (row_massar == target_massar_id)
                                             match_lesson = (target_lesson_to_reset == "كل الدروس" or row_lesson == target_lesson_to_reset)
                                             
                                             if match_massar and match_lesson:
                                                 deleted_count += 1
-                                                continue # نتخطى السجل فلا يتم حفظه (أي يُحذف)
+                                                continue
                                         
                                         new_records.append(row)
                                     
-                                    # تحديث الجدول في جوجل شيت بالكامل بعد حذف أسطر التلميذ
                                     ws_reports.clear()
                                     ws_reports.update([headers] + new_records)
                                     
-                                    st.cache_data.clear() # مسح الكاش لكي تظهر التغييرات فوراً
+                                    st.cache_data.clear()
                                     st.success(f"✅ تم بنجاح تصفير وحذف ({deleted_count}) سجل للتلميذ. يمكنه الآن الدخول والإرسال من جديد بكل حرية!")
                                     time.sleep(1)
                                     st.rerun()
@@ -451,9 +439,9 @@ def student_space(df_students, df_reports, df_lessons):
         
         student_all_submissions = pd.DataFrame()
         if not df_reports.empty and 'رقم مسار' in df_reports.columns:
-            df_reports['مسار_نظيف'] = df_reports['رقم مسار'].astype(str).str.strip().str.upper()
+            df_reports['massar_clean'] = df_reports['رقم مسار'].astype(str).str.strip().str.upper()
             df_reports['الدرس_نظيف'] = df_reports['الدرس'].astype(str).str.strip()
-            student_all_submissions = df_reports[df_reports['مسار_نظيف'] == student_massar.upper()]
+            student_all_submissions = df_reports[df_reports['massar_clean'] == student_massar.upper()]
             
         submitted_lessons = student_all_submissions['الدرس_نظيف'].tolist() if not student_all_submissions.empty else []
         
@@ -473,7 +461,7 @@ def student_space(df_students, df_reports, df_lessons):
                 if l_sub in submitted_lessons:
                     pct = lesson_percentages.get(l_sub, "N/A")
                     if pct == "0%":
-                        status_text += f"🚨 تم تدقيق <b>{l_sub}</b> وتم رصد <b>مخالفة/تكرار صور</b> (النسبة: <span style='color:white; background:red; padding:2px 6px; border-radius:4px;'><b>0%</b></span>)<br>"
+                        status_text += f"🚨 تم تدقيق <b>{l_sub}</b> وتم رصد <b>مخالفة/تكرار صور أو محتوى مأخوذ من زميل آخر</b> (النسبة: <span style='color:white; background:red; padding:2px 6px; border-radius:4px;'><b>0%</b></span>)<br>"
                     else:
                         status_text += f"📉 نسبة إنجازك لـ <b>{l_sub}</b> هي: <span style='color:#e0f2fe; background:#1e3a8a; padding:2px 8px; border-radius:5px;'><b>{pct}</b></span><br>"
             st.markdown(f"<div class='status-box'>{status_text}</div>", unsafe_allow_html=True)
@@ -491,7 +479,7 @@ def student_space(df_students, df_reports, df_lessons):
                     
                     if current_p == "0%":
                         st.error(f"🚨 **تنبيه نظام التدقيق والنزاهة الرقمية:**")
-                        st.markdown(f"<div style='background-color:#fee2e2; border-right:6px solid #dc2626; padding:15px; border-radius:8px; color:#991b1b; font-weight:bold;'>⚠️ لقد تم رفض هذا الإرسال وحصلت على نسبة 0% بسبب رصد تكرار بصرى في صور الدفاتر المرفوعة لخداع النظام.</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='background-color:#fee2e2; border-right:6px solid #dc2626; padding:15px; border-radius:8px; color:#991b1b; font-weight:bold;'>⚠️ لقد تم رفض هذا الإرسال وحصلت على نسبة 0% بسبب رصد تكرار بصرى أو تطابق خط الكتابة والمحتوى مع تلميذ آخر بالمؤسسة.</div>", unsafe_allow_html=True)
                         st.markdown(f"### 📋 تفاصيل تقرير المخالفة المحفوظ إدارياً وتوبيخ الذكاء الاصطناعي:")
                         st.info(lesson_full_reports.get(l_name, "لا يوجد نص تقرير محفوظ."))
                     else:
@@ -535,22 +523,19 @@ def student_space(df_students, df_reports, df_lessons):
                                                 if col in ["اسم", "إسم", "اسم التلميذ", "إسم التلميذ"]:
                                                     df_live_reports = df_live_reports.rename(columns={col: "الاسم"})
                                         else:
-                                            df_live_reports = pd.DataFrame(columns=["التاريخ", "رقم مسار", "الاسم", "القسم", "الدرس", "التقرير", "النسبة", "بصمات_الصور"])
+                                            df_live_reports = pd.DataFrame(columns=["التاريخ", "رقم مسار", "الاسم", "القسم", "الدرس", "التقرير", "النسبة", "بصمات_الصور", "بصمة_الخط"])
                                     except Exception as check_err:
-                                        st.error(f"❌ تعذر الاتصال بالسيرفر للتحقق: {check_err}")
+                                        st.error(f"❌ تعذر الاتصال بالسيرفر للتحقق من الأرشيف: {check_err}")
                                         st.stop()
                                 
                                 cheater_detected = False
                                 original_student_name = ""
                                 
                                 if "بصمات_الصور" in df_live_reports.columns:
-                                    if "رقم مسار" in df_live_reports.columns:
-                                        df_live_reports['maskar_clean'] = df_live_reports['رقم مسار'].astype(str).str.strip().str.upper()
-                                    else:
-                                        df_live_reports['maskar_clean'] = ""
+                                    df_live_reports['massar_clean'] = df_live_reports['رقم مسار'].astype(str).str.strip().str.upper() if "رقم مسار" in df_live_reports.columns else ""
                                         
                                     for idx, row in df_live_reports.iterrows():
-                                        if str(row['maskar_clean']) == student_massar.upper():
+                                        if str(row['massar_clean']) == student_massar.upper():
                                             continue
                                         saved_hashes_str = str(row['بصمات_الصور']).strip()
                                         if saved_hashes_str:
@@ -569,58 +554,102 @@ def student_space(df_students, df_reports, df_lessons):
                                         f"لا يمكن لتلميذين إرسال نفس صور الدفتر! تم رصد محاولة التكرار وإلغاء العملية."
                                     )
                                 else:
-                                    with st.spinner("🔄 البصمات والعدد سليم تماماً! جاري قياس نسبة الإنجاز..."):
+                                    with st.spinner("🔄 جاري قياس نسبة الإنجاز والتحقق من أصالة خط الكتابة مع الأرشيف..."):
                                         try:
+                                            # بناء سياق أرشيف بصمات الخطوط السابقة لنفس الدرس لمنع التحايل بتصوير نفس الدفتر
+                                            past_records_context = ""
+                                            if not df_live_reports.empty and 'الدرس' in df_live_reports.columns and 'بصمة_الخط' in df_live_reports.columns:
+                                                same_lesson_df = df_live_reports[df_live_reports['الدرس'] == l_name]
+                                                for idx, row in same_lesson_df.iterrows():
+                                                    if str(row.get('massar_clean', '')).strip().upper() != student_massar.upper():
+                                                        past_records_context += f"- التلميذ(ة): {row.get('الاسم', 'مجهول')} | بصمة خطه الموثقة: {row.get('بصمة_الخط', 'لا يوجد')}\n\n"
+
                                             prompt_instructions = f"""
                                             أنت مساعد أستاذ الرياضيات عبد الباسط منصوري بالثانوية التأهلية المغربية. 
                                             التلميذ {student_name} (القسم: {st.session_state.user['class']}) أرسل صور دفتره لدرس ({l_name}).
                                             
                                             المرجع والمخطط الملزم الذي حدده الأستاذ لك هو:
                                             \"\"\"{saved_lesson_reference}\"\"\"
+                                            
+                                            ⚠️ أرشيف بصمات الخطوط للتلاميذ الآخرين الذين أرسلوا قبله لنفس الدرس:
+                                            \"\"\"{past_records_context}\"\"\"
                                   
-                                            🚨 معيار صارم وحاسم ضد الغش: 
-                                            قم بفحص الصور المرفوعة بصرياً بدقة. إذا لاحظت أن التلميذ قام برفع "صورتين أو أكثر مكررتين لنفس الصفحة تماماً" (سواء أخذ لقطة شاشة مرتين، أو صور نفس الصفحة من زاويتين مختلفتين لخداع النظام وزيادة عدد الصور لكي يصل لـ 14 صورة)، فقم فوراً بما يلي:
-                                            1. اكتب تقريراً حازماً وموجزاً وتوبيخياً تخبره فيه بأنه تم رصد محاولة تكرار صور لخداع النظام ومخالفة ميثاق المادة.
-                                            2. وضع العبارة الأخيرة تماماً هكذا بدون زيادة أو نقصان:
-                                            النسبة النهائية: 0%
+                                            🚨 معيار صارم وحاسم ضد الغش والتحايل (تصوير نفس الدفتر الفعلي بهاتف آخر):
+                                            1. افحص الصور الحالية واستخرج "بصمة بصرية فريدة للخط والكتابة والتنسيق" في سطرين (تصف خصائص الخط، ألوان الأقلام، الرموز الرياضية، طريقة التسطير، وعيوب فريدة بالدفتر).
                                             
-                                            إذا كانت الصور كلها سليمة ومختلفة تتابعياً للدفتر، فنفذ المهام التربوية التالية:
-                                            1. تفقد العناوين والفقرات والتمارين المكتوبة بدقة وقارنها بالدرس المرجعي.
-                                            2. احسب بدقة "نسبة مئوية تقديرية" لإنجاز التلميذ لكتابة الدرس وحل التمارين.
-                                            3. صغ تقريراً تربوياً مشجعاً وموجزاً باللغة العربية.
+                                            2. قارن هذه الصور الحالية بـ "أرشيف بصمات الخطوط للتلاميذ الآخرين" المرفق بالأعلى. إذا وجدت تطابقاً بصرياً تاماً (أي أن هذه الصور تعود لنفس الدفتر المكتوب الذي استعمله تلميذ آخر سابقاً بالمؤسسة، والتلميذ الحالي يقوم فقط بإعادة تصوير الدفتر بهاتفه من زوايا أخرى للتحايل وسرقة مجهود صديقه)، فنفذ ما يلي فوراً:
+                                               - اكتب تقريراً حازماً وتوبيخياً تخبره فيه بأنه تم رصد سرقة دفتر مجهود تلميذ آخر ومخالفة ميثاق المادة والنزاهة الإدارية.
+                                               - ضع النسبة هكذا في السطر الأخير تماماً وبشكل حتمي:
+                                               النسبة النهائية: 0%
                                             
-                                            🚨 شرط أساسي صارم للبرمجة: يجب أن تنهي تقريرك بكتابة هذه العبارة بالنص في السطر الأخير تماماً:
-                                            النسبة النهائية: X%
+                                            3. إذا كانت الصور سليمة، مختلفة، وفريدة لدفتر التلميذ الخاص به:
+                                               - تفقد العناوين والفقرات والتمارين المكتوبة بدقة وقارنها بالدرس المرجعي.
+                                               - احسب بدقة "نسبة مئوية تقديرية" لإنجاز التلميذ لكتابة الدرس وحل التمارين.
+                                               - صغ تقريراً تربوياً مشجعاً وموجزاً باللغة العربية.
+                                               - يجب أن تنهي تقريرك بكتابة هذه العبارة بالنص في السطر الأخير تماماً:
+                                               النسبة النهائية: X%
+                                               
+                                            🚨 شرط برمجي إلزامي للتخزين المستقبلي: أضف دائماً في سطر مستقل في نهاية ردك العبارة التالية:
+                                            بصمة الخط المستخرجة حالياً: [ضع هنا الوصف البصري الفريد المستخرج للخط والتنسيق]
                                             """
                                             
                                             model = genai.GenerativeModel("gemini-2.5-flash")
                                             imgs = [Image.open(f) for f in up_files]
-                                            res = model.generate_content([prompt_instructions, *imgs])
-                                            report_text = res.text
                                             
+                                            response_success = False
+                                            report_text = ""
+                                            
+                                            # --- الحماية المحصنة والذكية ضد توقف السيرفر والضغط اللحظي Rate Limits ---
+                                            for retry_attempt in range(3):
+                                                try:
+                                                    res = model.generate_content([prompt_instructions, *imgs])
+                                                    report_text = res.text
+                                                    response_success = True
+                                                    break
+                                                except Exception as api_err:
+                                                    if "429" in str(api_err) or "ResourceExhausted" in str(api_err):
+                                                        st.warning(f"⚠️ الخادم ذو ضغط عالٍ حالياً بسبب إرسالات التلاميذ. محاولة إعادة الاتصال الذكي رقم ({retry_attempt + 1}/3)...")
+                                                        time.sleep(15)
+                                                    else:
+                                                        raise api_err
+                                            
+                                            if not response_success:
+                                                st.error("🚨 خادم الفحص السحابي لـ Google غير مستقر حالياً بسبب كثرة الضغط. يرجى إعادة الضغط على الزر بعد ثوانٍ قليلة.")
+                                                st.stop()
+                                                
                                             calculated_percentage = "100%"
-                                            match = re.search(r"النسبة\s+النهائية:\s*(\d+%)", report_text)
-                                            if match: calculated_percentage = match.group(1)
+                                            match_pct = re.search(r"النسبة\s+النهائية:\s*(\d+%)", report_text)
+                                            if match_pct: calculated_percentage = match_pct.group(1)
+
+                                            extracted_handwriting_profile = "خط قياسي غير مصنف."
+                                            match_profile = re.search(r"بصمة الخط المستخرجة حالياً:\s*(.*)", report_text)
+                                            if match_profile: extracted_handwriting_profile = match_profile.group(1).strip()
 
                                             hashes_to_save = ",".join(current_hashes)
 
                                             live_sh.append_row([
-                                                datetime.now().strftime("%Y-%m-%d"),          # العمود A: التاريخ
-                                                student_massar.upper(),                       # العمود B: رقم مسار
-                                                student_name,                                 # العمود C: الاسم
-                                                st.session_state.user['class'],               # العمود D: القسم
-                                                l_name,                                       # العمود E: الدرس
-                                                report_text,                                  # العمود F: التقرير
-                                                calculated_percentage,                        # العمود G: النسبة
-                                                hashes_to_save                                # العمود H: بصمات_الصور
+                                                datetime.now().strftime("%Y-%m-%d"),          # A: التاريخ
+                                                student_massar.upper(),                       # B: رقم مسار
+                                                student_name,                                 # C: الاسم
+                                                st.session_state.user['class'],               # D: القسم
+                                                l_name,                                       # E: الدرس
+                                                report_text,                                  # F: التقرير
+                                                calculated_percentage,                        # G: النسبة
+                                                hashes_to_save,                               # H: بصمات_الصور
+                                                extracted_handwriting_profile                 # I: بصمة_الخط للأرشيف
                                             ])
                                             
                                             st.cache_data.clear()
-                                            st.success(f"تم حفظ التقرير بنجاح! نسبة الإنجاز المسجلة للأستاذ: {calculated_percentage} ✅")
+                                            
+                                            if calculated_percentage == "0%":
+                                                st.error("🚨 تم رفض الملف وتسجيل نسبة 0% بسبب رصد مخالفة في المحتوى المرفوع!")
+                                            else:
+                                                st.success(f"تم حفظ التقرير بنجاح! نسبة الإنجاز المسجلة للأستاذ: {calculated_percentage} ✅")
+                                                
                                             st.rerun() 
                                             
                                         except Exception as gemini_err:
-                                            st.error(f"❌ حدث خطأ أثناء فحص الدفتر: {gemini_err}")
+                                            st.error(f"❌ حدث خطأ غير متوقع أثناء معالجة الدفتر: {gemini_err}")
                         else:
                             st.warning("⚠️ المرجو تزويد المنصة بصور الدفتر أولاً.")                        
 
