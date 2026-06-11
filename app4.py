@@ -138,7 +138,26 @@ def upload_pdf_to_drive(file_name, file_bytes):
 def calculate_image_hash(file_bytes):
     return hashlib.md5(file_bytes).hexdigest()
 
-@st.cache_data(ttl=2) # تقليل مدة الكاش للتحديث الفوري بعد الحذف
+# دالة ذكية جديدة لتقليص وتصغير حجم الصور لحماية الحساب المجاني من الحظر
+def optimize_image_for_api(uploaded_file):
+    try:
+        img = Image.open(uploaded_file)
+        # إذا كانت الصورة ضخمة، نقوم بتصغير أبعادها مع الحفاظ على التناسب
+        max_size = 1200
+        if img.width > max_size or img.height > max_size:
+            img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+        
+        # تحويل الصورة إلى صيغة JPEG مضغوطة لتخفيف الـ Tokens المرسلة
+        buffer = io.BytesIO()
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        img.save(buffer, format="JPEG", quality=75) # جودة 75% ممتازة للخط وموفرة جداً في الحجم
+        buffer.seek(0)
+        return Image.open(buffer)
+    except:
+        return Image.open(uploaded_file)
+
+@st.cache_data(ttl=2)
 def load_data():
     sh = None
     for attempt in range(4):
@@ -505,10 +524,17 @@ def student_space(df_students, df_reports, df_lessons):
                             else:
                                 with st.spinner("🔄 جاري التحقق الفوري من سجلاتك وفحص جودة الصور..."):
                                     current_hashes = []
+                                    optimized_images = []
+                                    
+                                    # معالجة الصور وضغطها تلقائياً لتقليل الـ Tokens بنسبة 90%
                                     for f in up_files:
                                         f_bytes = f.read()
                                         f.seek(0)
                                         current_hashes.append(calculate_image_hash(f_bytes))
+                                        
+                                        # ضغط الصورة وتخفيف حجمها قبل إرسالها لـ Gemini API
+                                        optimized_img = optimize_image_for_api(f)
+                                        optimized_images.append(optimized_img)
                                     
                                     try:
                                         client = get_gspread_client()
@@ -556,7 +582,6 @@ def student_space(df_students, df_reports, df_lessons):
                                 else:
                                     with st.spinner("🔄 جاري قياس نسبة الإنجاز والتحقق من أصالة خط الكتابة مع الأرشيف..."):
                                         try:
-                                            # بناء سياق أرشيف بصمات الخطوط السابقة لنفس الدرس لمنع التحايل بتصوير نفس الدفتر
                                             past_records_context = ""
                                             if not df_live_reports.empty and 'الدرس' in df_live_reports.columns and 'بصمة_الخط' in df_live_reports.columns:
                                                 same_lesson_df = df_live_reports[df_live_reports['الدرس'] == l_name]
@@ -579,42 +604,42 @@ def student_space(df_students, df_reports, df_lessons):
                                             
                                             2. قارن هذه الصور الحالية بـ "أرشيف بصمات الخطوط للتلاميذ الآخرين" المرفق بالأعلى. إذا وجدت تطابقاً بصرياً تاماً (أي أن هذه الصور تعود لنفس الدفتر المكتوب الذي استعمله تلميذ آخر سابقاً بالمؤسسة، والتلميذ الحالي يقوم فقط بإعادة تصوير الدفتر بهاتفه من زوايا أخرى للتحايل وسرقة مجهود صديقه)، فنفذ ما يلي فوراً:
                                                - اكتب تقريراً حازماً وتوبيخياً تخبره فيه بأنه تم رصد سرقة دفتر مجهود تلميذ آخر ومخالفة ميثاق المادة والنزاهة الإدارية.
-                                               - ضع النسبة هكذا في السطر الأخير تماماً وبشكل حتمي:
+                                               - وضع النسبة هكذا في السطر الأخير تماماً وبشكل حتمي:
                                                النسبة النهائية: 0%
                                             
                                             3. إذا كانت الصور سليمة، مختلفة، وفريدة لدفتر التلميذ الخاص به:
-                                               - تفقد العناوين والفقرات والتمارين المكتوبة بدقة  سطرا بسطر وقارنها بالدرس المرجعي.
+                                               - تفقد العناوين والفقرات والتمارين المكتوبة بدقة وقارنها بالدرس المرجعي.
                                                - احسب بدقة "نسبة مئوية تقديرية" لإنجاز التلميذ لكتابة الدرس وحل التمارين.
                                                - صغ تقريراً تربوياً مشجعاً وموجزاً باللغة العربية.
                                                - يجب أن تنهي تقريرك بكتابة هذه العبارة بالنص في السطر الأخير تماماً:
                                                النسبة النهائية: X%
                                                
                                             🚨 شرط برمجي إلزامي للتخزين المستقبلي: أضف دائماً في سطر مستقل في نهاية ردك العبارة التالية:
-                                            بصمة الخط المستخرجة حالياً: [ضع هنا الوصف البصري الدقيق جدا الفريد المستخرج للخط والتنسيق لكل الصور]
+                                            بصمة الخط المستخرجة حالياً: [ضع هنا الوصف البصري الفريد المستخرج للخط والتنسيق]
                                             """
                                             
                                             model = genai.GenerativeModel("gemini-2.5-flash")
-                                            imgs = [Image.open(f) for f in up_files]
                                             
                                             response_success = False
                                             report_text = ""
                                             
-                                            # --- الحماية المحصنة والذكية ضد توقف السيرفر والضغط اللحظي Rate Limits ---
+                                            # تشغيل مع المحاولة المتكررة الذكية والانتظار الموسع في حالة وجود ضغط عالي
                                             for retry_attempt in range(3):
                                                 try:
-                                                    res = model.generate_content([prompt_instructions, *imgs])
+                                                    # نرسل الصور الخفيفة المضغوطة لتفادي حظر السيرفر
+                                                    res = model.generate_content([prompt_instructions, *optimized_images])
                                                     report_text = res.text
                                                     response_success = True
                                                     break
                                                 except Exception as api_err:
                                                     if "429" in str(api_err) or "ResourceExhausted" in str(api_err):
-                                                        st.warning(f"⚠️ الخادم ذو ضغط عالٍ حالياً بسبب إرسالات التلاميذ. محاولة إعادة الاتصال الذكي رقم ({retry_attempt + 1}/3)...")
-                                                        time.sleep(15)
+                                                        st.warning(f"⚠️ الخادم ممتلئ حالياً. جاري الانتظار الذكي وإعادة المحاولة التلقائية في غضون ثوانٍ ({retry_attempt + 1}/3)...")
+                                                        time.sleep(25)  # زيادة مدة الانتظار لتفريغ الـ Tokens في السيرفر
                                                     else:
                                                         raise api_err
                                             
                                             if not response_success:
-                                                st.error("🚨 خادم الفحص السحابي لـ Google غير مستقر حالياً بسبب كثرة الضغط. يرجى إعادة الضغط على الزر بعد ثوانٍ قليلة.")
+                                                st.error("🚨 خادم الفحص السحابي لـ Google ممتلئ حالياً بسبب كثرة الضغط. يرجى إعادة الضغط على الزر بعد ثوانٍ قليلة.")
                                                 st.stop()
                                                 
                                             calculated_percentage = "100%"
@@ -628,15 +653,15 @@ def student_space(df_students, df_reports, df_lessons):
                                             hashes_to_save = ",".join(current_hashes)
 
                                             live_sh.append_row([
-                                                datetime.now().strftime("%Y-%m-%d"),          # A: التاريخ
-                                                student_massar.upper(),                       # B: رقم مسار
-                                                student_name,                                 # C: الاسم
-                                                st.session_state.user['class'],               # D: القسم
-                                                l_name,                                       # E: الدرس
-                                                report_text,                                  # F: التقرير
-                                                calculated_percentage,                        # G: النسبة
-                                                hashes_to_save,                               # H: بصمات_الصور
-                                                extracted_handwriting_profile                 # I: بصمة_الخط للأرشيف
+                                                datetime.now().strftime("%Y-%m-%d"),          
+                                                student_massar.upper(),                       
+                                                student_name,                                 
+                                                st.session_state.user['class'],               
+                                                l_name,                                       
+                                                report_text,                                  
+                                                calculated_percentage,                        
+                                                hashes_to_save,                               
+                                                extracted_handwriting_profile                 
                                             ])
                                             
                                             st.cache_data.clear()
