@@ -618,7 +618,7 @@ def student_space(df_students, df_reports, df_lessons):
                                             بصمة الخط المستخرجة حالياً: [ضع هنا الوصف البصري الفريد المستخرج للخط والتنسيق]
                                             """
                                             
-                                            model = genai.GenerativeModel("gemini-1.5-flash-002")
+                                            model = genai.GenerativeModel("gemini-2.5-flash")
                                             
                                             response_success = False
                                             report_text = ""
