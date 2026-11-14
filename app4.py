@@ -207,9 +207,9 @@ def load_data():
             df_students.columns = df_students.columns.str.strip()
             if "إسم التلميذ" in df_students.columns: df_students = df_students.rename(columns={"إسم التلميذ": "اسم التلميذ"})
         else:
-            df_students = pd.DataFrame(columns=["رقم التلميذ", "اسم التلميذ", "تاريخ الإزدياد", "القسم", "شيفر كلاس ستودنت"])
+            df_students = pd.DataFrame(columns=["رقم التلميذ", "الرقم التسلسلي", "اسم التلميذ", "تاريخ الإزدياد", "القسم"])
     except:
-        df_students = pd.DataFrame(columns=["رقم التلميذ", "اسم التلميذ", "تاريخ الإزدياد", "القسم", "شيفر كلاس ستودنت"])
+        df_students = pd.DataFrame(columns=["رقم التلميذ", "الرقم التسلسلي", "اسم التلميذ", "تاريخ الإزدياد", "القسم"])
 
     try:
         reports_worksheet = sh.worksheet("Reports")
@@ -242,9 +242,10 @@ def load_data():
 
 df_students, df_reports, df_lessons = load_data()
 
+# تصفية الأقسام المعتمدة حسب إكسيل الأستاذ
 if not df_students.empty and 'القسم' in df_students.columns:
-    allowed_classes = ["TCSCF4", "1PSEF1", "1PSEF2"]
-    df_students = df_students[df_students['القسم'].isin(allowed_classes)]
+    allowed_classes = ["TCSF-4", "1BACSEF-1", "1BACSEF-2"]
+    df_students = df_students[df_students['القسم'].astype(str).str.strip().isin(allowed_classes)]
 
 def get_lesson_ref(lesson_name, df_lessons):
     DRIVE_LINKS = {
@@ -278,7 +279,7 @@ with st.sidebar:
         user_display = st.session_state.user.get('name', 'المستخدم')
         st.success(f" مرحباً بـ: \n\n**{user_display}**")
         if st.session_state.role == "student":
-            st.info(f"🏫 القسم: {st.session_state.user.get('class')}\n🔢 الشيفر: {st.session_state.user.get('student_code')}")
+            st.info(f"🏫 القسم: {st.session_state.user.get('class')}\n🔢 الرقم التسلسلي: {st.session_state.user.get('student_code')}")
         st.divider()
         if st.button("🚪 تسجيل الخروج", use_container_width=True):
             for key in list(st.session_state.keys()): del st.session_state[key]
@@ -293,7 +294,7 @@ def admin_space(df_students, df_reports, df_lessons):
     st.markdown("""
         <div style='background: linear-gradient(#008E8E, #1a365d 0%, #C72C48 100%); padding: 30px; border-radius: 15px; margin-bottom: 25px; color: white; border: 2px solid #C5A059;'>
             <h1 class='golden-title' style='font-size: 2.3rem;'>👨‍🏫 الفضاء الرقمي للتدقيق الإداري والتربوي</h1>
-            <p class='golden-sub'>مرحباً بك ذ.عبد الباسط منصوري - تتبع دقيق لدفاتر الأقسام الثلاثة (TCSCF4, 1PSEF1, 1PSEF2)</p>
+            <p class='golden-sub'>مرحباً بك ذ.عبد الباسط منصوري - تتبع دقيق لدفاتر الأقسام (TCSF-4, 1BACSEF-1, 1BACSEF-2)</p>
         </div>
     """, unsafe_allow_html=True)
     
@@ -309,7 +310,7 @@ def admin_space(df_students, df_reports, df_lessons):
             st.markdown(f"<div class='metric-card'><p style='color:#64748b; font-weight:bold;'>الأقسام النشطة</p><h2 style='margin:0; color:#1a365d;'>🏫 {num_classes}</h2></div>", unsafe_allow_html=True)
         
         if not df_reports.empty and 'القسم' in df_reports.columns:
-            fig = px.bar(df_reports.groupby('القسم').size().reset_index(name='عدد الإرسالات'), x='القسم', y='عدد الإرسالات', title="📊 تفاعل الأقسام", color_discrete_sequence=['#1a365d'])
+            fig = px.bar(df_reports.groupby('القسم').size().reset_index(name='عدد الإرسالات'), x='القسم', y='عدد الإرسالات', title="📊 تفاعل الأقسام الثلاثة", color_discrete_sequence=['#1a365d'])
             st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
@@ -422,14 +423,14 @@ def admin_space(df_students, df_reports, df_lessons):
 
     with tab4:
         st.markdown("<div class='section-title'>⚙️ إعدادات الصيانة والأمان</div>", unsafe_allow_html=True)
-        st.info("تم تفعيل التدقيق المجهري العميق للمحتوى مقارنة بالدرس النموذجي، مع رصد السطور والتعاريف الناقصة.")
+        st.info("الأقسام المفعلة حصرياً: TCSF-4, 1BACSEF-1, 1BACSEF-2 مع رصد الرقم التسلسلي في هوامش الصفحات والتدقيق المجهري.")
 
 # --- واجهة التلميذ ---
 def student_space(df_students, df_reports, df_lessons):
     st.markdown("""
         <div style='background: linear-gradient(135deg, #10b981 0%, #1a365d 100%); padding: 35px; border-radius: 15px; margin-bottom: 25px; text-align: center; border: 2px solid #C5A059;'>
             <h2 class='golden-title' style='font-size: 2.5rem;'>🇲🇦 الفضاء الرقمي للتلميذات والتلاميذ</h2>
-            <p class='golden-sub'>منصة ذ.منصوري للتدقيق المجهري للدفاتر المدرسية - الأقسام: TCSCF4, 1PSEF1, 1PSEF2</p>
+            <p class='golden-sub'>منصة ذ.منصوري للتدقيق المجهري للدفاتر - الأقسام المعتمدة: TCSF-4, 1BACSEF-1, 1BACSEF-2</p>
         </div>
     """, unsafe_allow_html=True)
     
@@ -441,7 +442,7 @@ def student_space(df_students, df_reports, df_lessons):
     col_name = 'اسم التلميذ'
     col_id = 'رقم التلميذ'  
     col_birth = 'تاريخ الإزدياد' 
-    col_code = 'شيفر كلاس ستودنت'
+    col_code = 'الرقم التسلسلي'
 
     if not st.session_state.auth:
         st.markdown("<div class='section-title'>🔑 تسجيل الدخول الآمن لمنظومة التدقيق</div>", unsafe_allow_html=True)
@@ -479,7 +480,7 @@ def student_space(df_students, df_reports, df_lessons):
         student_class = st.session_state.user.get('class', '')
         student_code = st.session_state.user.get('student_code', '')
         
-        st.success(f"🏫 التلميذ(ة): **{student_name}** | القسم: **{student_class}** | الشيفر التسلسلي: **{student_code}**")
+        st.success(f"🏫 التلميذ(ة): **{student_name}** | القسم: **{student_class}** | الرقم التسلسلي: **{student_code}**")
         
         student_all_submissions = pd.DataFrame()
         if not df_reports.empty and 'رقم مسار' in df_reports.columns:
@@ -505,12 +506,12 @@ def student_space(df_students, df_reports, df_lessons):
                 if l_sub in submitted_lessons:
                     pct = lesson_percentages.get(l_sub, "N/A")
                     if pct == "0%":
-                        status_text += f"🚨 تم تدقيق <b>{l_sub}</b> وتم رصد <b>مخالفة أو خلل في الشيفر التسلسلي أو تطابق صور</b> (النسبة: <span style='color:white; background:red; padding:2px 6px; border-radius:4px;'><b>0%</b></span>)<br>"
+                        status_text += f"🚨 تم تدقيق <b>{l_sub}</b> وتم رصد <b>مخالفة أو غياب الرقم التسلسلي في الهامش أو تطابق صور</b> (النسبة: <span style='color:white; background:red; padding:2px 6px; border-radius:4px;'><b>0%</b></span>)<br>"
                     else:
                         status_text += f"📉 نسبة إنجازك لـ <b>{l_sub}</b> هي: <span style='color:#e0f2fe; background:#1e3a8a; padding:2px 8px; border-radius:5px;'><b>{pct}</b></span><br>"
             st.markdown(f"<div class='status-box'>{status_text}</div>", unsafe_allow_html=True)
         else:
-            st.warning("لم تقم بإرسال أي دروس بعد. تأكد من ترقيم الصفحات وكتابة الشيفر التسلسلي الخاص بك بوضوح.")
+            st.warning(f"لم تقم بإرسال أي دروس بعد. تأكد من ترقيم الصفحات وكتابة رقمك التسلسلي ({student_code}) بوضوح في **هامش جميع صفحات الدفتر** (أفقياً أو عمودياً، أعلى أو أسفل الصفحة).")
 
         lesson_tabs = st.tabs(["📘 المجزوءة / الدرس 1", "📗 المجزوءة / الدرس 2", "📙 المجزوءة / الدرس 3"])
         
@@ -522,7 +523,7 @@ def student_space(df_students, df_reports, df_lessons):
                     current_p = lesson_percentages.get(l_name, "N/A")
                     if current_p == "0%":
                         st.error(f"🚨 **تنبيه نظام التدقيق:**")
-                        st.markdown(f"<div style='background-color:#fee2e2; border-right:6px solid #dc2626; padding:15px; border-radius:8px; color:#991b1b; font-weight:bold;'>⚠️ تم رفض هذا الإرسال وحصلت على نسبة 0% بسبب خلل في الشيفر التسلسلي داخل القسم أو تطابق الصور.</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='background-color:#fee2e2; border-right:6px solid #dc2626; padding:15px; border-radius:8px; color:#991b1b; font-weight:bold;'>⚠️ تم رفض هذا الإرسال وحصلت على نسبة 0% بسبب غياب أو خطأ في الرقم التسلسلي بهوامش الصفحات أو تطابق الصور.</div>", unsafe_allow_html=True)
                         st.markdown(f"### 📋 تقرير التدقيق المفصل:")
                         st.info(lesson_full_reports.get(l_name, "لا يوجد نص تقرير محفوظ."))
                     else:
@@ -534,7 +535,7 @@ def student_space(df_students, df_reports, df_lessons):
                     saved_lesson_reference = get_lesson_ref(l_name, df_lessons)
                     
                     up_files = st.file_uploader(
-                        f"اختر صور صفحات الدفتر المرقمة لـ {l_name} (🚨 تنبيه: يشترط تحميل 13 صورة على الأقل متضمنة لشيفرك التسلسلي {student_code})", 
+                        f"اختر صور صفحات الدفتر المرقمة لـ {l_name} (🚨 تنبيه: يشترط تحميل 13 صورة على الأقل مع كتابة الرقم التسلسلي ({student_code}) في **هامش الصفحات**)", 
                         accept_multiple_files=True, 
                         key=f"up_{l_name}", 
                         type=['jpg','jpeg','png']
@@ -545,7 +546,7 @@ def student_space(df_students, df_reports, df_lessons):
                             if len(up_files) < 13:
                                 st.error(f"⚠️ **خطأ في معايير قبول الدفتر:** لقد قمت برفع ({len(up_files)}) صور فقط! يشترط رفع **13 صورة على الأقل** للدرس.")
                             else:
-                                with st.spinner("🔄 جاري التحقق من الشيفر التسلسلي وضغط الصور..."):
+                                with st.spinner("🔄 جاري التحقق من الرقم التسلسلي في الهوامش وضغط الصور..."):
                                     current_hashes = []
                                     optimized_images = []
                                     
@@ -571,7 +572,7 @@ def student_space(df_students, df_reports, df_lessons):
                                         st.error(f"❌ تعذر الاتصال بالسيرفر: {check_err}")
                                         st.stop()
                                 
-                                # فحص التكرار البصري
+                                # فحص التكرار البصري للصور
                                 cheater_detected = False
                                 original_student_name = ""
                                 if "بصمات_الصور" in df_live_reports.columns and "رقم مسار" in df_live_reports.columns:
@@ -592,7 +593,7 @@ def student_space(df_students, df_reports, df_lessons):
                                 if cheater_detected:
                                     st.error(f"🚨 عذراً، هذه الصور تم إرسالها مسبقاً من طرف التلميذ(ة): **{original_student_name}**. ممنوع إعادة تصوير نفس الدفتر!")
                                 else:
-                                    with st.spinner("🔍 جاري إجراء التدقيق المجهري المقارن مع الدرس النموذجي..."):
+                                    with st.spinner("🔍 جاري التحقق من الهوامش والشيفر والتدقيق المجهري مع الدرس النموذجي..."):
                                         try:
                                             past_records_context = ""
                                             if not df_live_reports.empty and 'الدرس' in df_live_reports.columns and 'القسم' in df_live_reports.columns:
@@ -604,32 +605,22 @@ def student_space(df_students, df_reports, df_lessons):
                                                     if str(row.get('massar_clean', '')).strip().upper() != student_massar.upper():
                                                         past_records_context += f"- زميل في نفس القسم ({student_class}) | بصمته: {row.get('بصمة_الخط', 'لا يوجد')}\n\n"
 
-                                            # --- Prompt المعدل للتدقيق المجهري المعمق والحرفي ---
+                                            # --- Prompt مخصص للبحث في الهوامش عن الرقم التسلسلي والتدقيق المجهري ---
                                             prompt_instructions = f"""
                                             أنت مساعد أستاذ الرياضيات والفيزياء عبد الباسط منصوري بالثانوية التأهيلية المغربية. 
-                                            التلميذ {student_name} ينتمي لقسم ({student_class})، ويمتلك داخل هذا القسم حصرياً الرقم التسلسلي: ({student_code}).
+                                            التلميذ {student_name} ينتمي لقسم ({student_class})، ورقم تشفيره التسلسلي الخاص به داخل هذا القسم هو: ({student_code}).
                                             أرسل صور دفتره المرقمة لدرس ({l_name}).
                                             
-                                            مهمتك الأساسية هي "التدقيق المجهري والعميق" للمحتوى مقارنة بالدرس النموذجي!
-                                            
-                                            المرجع والدرس النموذجي الملزم الذي حدده الأستاذ في جوجل درايف هو:
-                                            \"\"\"{saved_lesson_reference}\"\"\"
-                                            
-                                            ⚠️ أرشيف تلاميذ نفس القسم ({student_class}) فقط للتحقق من منع النقل:
-                                            \"\"\"{past_records_context}\"\"\"
-                                  
-                                            🚨 معايير التدقيق والنزاهة الصارمة:
-                                            1. **التحقق من الهوية والشيفر:** تأكد بصرياً من وجود الرقم التسلسلي ({student_code}) بوضوح في صفحات التلميذ داخل قسمه ({student_class}). إذا لم يوجد أو ظهر رقم تلميذ آخر، فاعتبره غشاً أو إهمالاً واكتب النسبة النهائية: 0%.
-                                            2. **التدقيق المجهري للنص والمضمون:** افحص صفحات التلميذ بدقة ومقارنتها بالدرس النموذجي المرجعي:
-                                               - هل استخرج التلميذ النص والفقرات كاملة؟
-                                               - دقق في العناوين والتعاريف والخاصيات الرياضية أو الفيزيائية. **إذا نسي التلميذ ولو سطراً واحداً في تعريفه أو عنواناً أساسياً أو فقرة، فاذكر ذلك بوضوح تام في تقريرك** (مثلاً: "نسيت السطر الثاني في التعريف الفلاني في العنوان الثاني"، أو "الفقرة المتعلقة بالخاصية الفلانية في الصفحة 3 ناقصة").
-                                               - لا تقبل النصف أو الإهمال؛ كن دقيقاً جداً في تحديد النقص.
-                                            3. **حساب نسبة الإنجاز:** بناءً على مقارنة محتوى دفتر التلميذ بالدرس النموذجي (التعاريف، الأمثلة، التمارين)، احسب بدقة النسبة المئوية (مثلاً 92%، 85%...).
-                                            4. **صياغة التقرير:** اكتب تقريراً تربوياً وتوجيهياً باللغة العربية موجهاً للتلميذ، يوضح له بدقة موطن النقص والإضافات التي يجب أن يصححها في دفتره.
-                                            
-                                            5. **السطر الأخير (حتمي جداً):** يجب أن تنهي ردك حصرياً وبدقة بهاتين العبارتين في السطرين الاخيرين:
+                                            مهمتك الأساسية والصارمة:
+                                            1. **فحص الهوامش للرقم التسلسلي:** افحص بدقة **هوامش جميع الصفحات المرفقة** (سواء كتبت أفقياً أو عمودياً، أعلى أو أسفل الصفحة). هل الرقم التسلسلي ({student_code}) مكتوب وواضح في هوامش الصفحات؟ 
+                                               - إذا كان الرقم التسلسلي غير مكتوب، أو وُجد رقم يخص تلميذاً آخر في نفس القسم ({student_class}), فاعتبره تلاعباً أو غشاً واكتب فوراً النسبة النهائية: 0% مع توضيح السبب في التقرير.
+                                            2. **التدقيق المجهري للنص والمضمون مقارنة بالدرس النموذجي:**
+                                               - المرجع النموذجي للدرس هو: \"\"\"{saved_lesson_reference}\"\"\"
+                                               - قارن محتوى صفحات التلميذ بالمرجع. إذا نسي التلميذ ولو سطراً واحداً في تعريف أو عنوان أساسي أو فقرة، **فاذكر ذلك بوضوح ودقة** في التقرير (مثلاً: "نسيت السطر الثاني في تعريف كذا..").
+                                            3. **حساب نسبة الإنجاز:** حدد النسبة المئوية بدقة بناءً على جودة ومحتوى الدرس والتمارين.
+                                            4. **السطر الأخير (حتمي جداً):** أنهِ ردك حصرياً بهاتين العبارتين في السطرين الأخيرين:
                                                النسبة النهائية: X%
-                                               بصمة الخط المستخرجة حالياً: [القسم: {student_class} | الشيفر: {student_code} | وصف دقيق لخط التلميذ والصفحات المرقمة]
+                                               بصمة الخط المستخرجة حالياً: [القسم: {student_class} | الرقم التسلسلي الهامشي: {student_code} | وصف دقيق لخط التلميذ]
                                             """
                                             
                                             report_text = generate_content_with_fallback(prompt_instructions, optimized_images)
@@ -638,7 +629,7 @@ def student_space(df_students, df_reports, df_lessons):
                                             match_pct = re.search(r"النسبة\s+النهائية:\s*(\d+%)", report_text)
                                             if match_pct: calculated_percentage = match_pct.group(1)
 
-                                            extracted_handwriting_profile = f"شيفر القسم: {student_code} - تدقيق مجهري دقيق."
+                                            extracted_handwriting_profile = f"الرقم التسلسلي بالقسم: {student_code} - الهامش مؤكد."
                                             match_profile = re.search(r"بصمة الخط المستخرجة حالياً:\s*(.*)", report_text)
                                             if match_profile: extracted_handwriting_profile = match_profile.group(1).strip()
 
@@ -659,7 +650,7 @@ def student_space(df_students, df_reports, df_lessons):
                                             st.cache_data.clear()
                                             
                                             if calculated_percentage == "0%":
-                                                st.error("🚨 تم رفض الملف وتسجيل نسبة 0% بسبب خلل في الشيفر التسلسلي أو تطابق الصور!")
+                                                st.error("🚨 تم رفض الملف وتسجيل نسبة 0% بسبب غياب الرقم التسلسلي في الهوامش أو رصد مخالفة!")
                                             else:
                                                 st.success(f"تم التدقيق بنجاح! نسبة الإنجاز المسجلة للأستاذ: {calculated_percentage} ✅")
                                                 
