@@ -10,9 +10,8 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 import io
 import time
-import base64
-import re  
 import hashlib 
+import re  
 
 # --- 1. الإعدادات الأولية وإضفاء الطابع الاحترافي للوزارة ---
 st.set_page_config(
@@ -21,7 +20,6 @@ st.set_page_config(
     page_icon="math🇲🇦"
 )
 
-# دالة الخلفية السحابية المحدثة
 def get_custom_bg():
     return """
     <style>
@@ -106,11 +104,6 @@ def get_custom_bg():
 
 st.markdown(get_custom_bg(), unsafe_allow_html=True)
 
-try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-except Exception as e:
-    st.error("⚠️ لم يتم العثور على مفتاح 'GEMINI_API_KEY'.")
-
 if 'auth' not in st.session_state: st.session_state.auth = False
 if 'user' not in st.session_state: st.session_state.user = {}
 if 'role' not in st.session_state: st.session_state.role = None
@@ -138,24 +131,59 @@ def upload_pdf_to_drive(file_name, file_bytes):
 def calculate_image_hash(file_bytes):
     return hashlib.md5(file_bytes).hexdigest()
 
-# دالة ذكية جديدة لتقليص وتصغير حجم الصور لحماية الحساب المجاني من الحظر
 def optimize_image_for_api(uploaded_file):
     try:
         img = Image.open(uploaded_file)
-        # إذا كانت الصورة ضخمة، نقوم بتصغير أبعادها مع الحفاظ على التناسب
-        max_size = 1200
+        max_size = 900  
         if img.width > max_size or img.height > max_size:
             img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
         
-        # تحويل الصورة إلى صيغة JPEG مضغوطة لتخفيف الـ Tokens المرسلة
         buffer = io.BytesIO()
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
-        img.save(buffer, format="JPEG", quality=75) # جودة 75% ممتازة للخط وموفرة جداً في الحجم
+        img.save(buffer, format="JPEG", quality=65) 
         buffer.seek(0)
         return Image.open(buffer)
     except:
         return Image.open(uploaded_file)
+
+def generate_content_with_fallback(prompt, images):
+    api_keys = []
+    if "GEMINI_API_KEYS" in st.secrets:
+        api_keys = st.secrets["GEMINI_API_KEYS"]
+    else:
+        for k in ["GEMINI_API_KEY", "GEMINI_API_KEY_1", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3", "GEMINI_API_KEY_4"]:
+            if k in st.secrets:
+                api_keys.append(st.secrets[k])
+                
+    if not api_keys:
+        try:
+            api_keys = [st.secrets["GEMINI_API_KEY"]]
+        except:
+            raise Exception("⚠️ لم يتم العثور على أي مفتاح لـ GEMINI_API_KEY في السكريت.")
+
+    models_list = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite"]
+    
+    last_error = None
+    for key in api_keys:
+        genai.configure(api_key=key)
+        for model_name in models_list:
+            for attempt in range(2):
+                try:
+                    model = genai.GenerativeModel(model_name)
+                    response = model.generate_content([prompt, *images])
+                    if response and response.text:
+                        return response.text
+                except Exception as e:
+                    err_str = str(e)
+                    last_error = e
+                    if "429" in err_str or "ResourceExhausted" in err_str:
+                        time.sleep(3)
+                        continue
+                    else:
+                        break
+                        
+    raise Exception(f"❌ تعذر الاتصال بجميع خوادم الذكاء الاصطناعي بسبب الضغط (خطأ: {last_error}). حاول مجدداً.")
 
 @st.cache_data(ttl=2)
 def load_data():
@@ -179,9 +207,9 @@ def load_data():
             df_students.columns = df_students.columns.str.strip()
             if "إسم التلميذ" in df_students.columns: df_students = df_students.rename(columns={"إسم التلميذ": "اسم التلميذ"})
         else:
-            df_students = pd.DataFrame(columns=["رقم التلميذ", "اسم التلميذ", "تاريخ الإزدياد", "القسم"])
+            df_students = pd.DataFrame(columns=["رقم التلميذ", "اسم التلميذ", "تاريخ الإزدياد", "القسم", "شيفر كلاس ستودنت"])
     except:
-        df_students = pd.DataFrame(columns=["رقم التلميذ", "اسم التلميذ", "تاريخ الإزدياد", "القسم"])
+        df_students = pd.DataFrame(columns=["رقم التلميذ", "اسم التلميذ", "تاريخ الإزدياد", "القسم", "شيفر كلاس ستودنت"])
 
     try:
         reports_worksheet = sh.worksheet("Reports")
@@ -190,7 +218,6 @@ def load_data():
             reports_headers = [h.strip() for h in reports_rows[0]]
             df_reports = pd.DataFrame(reports_rows[1:], columns=reports_headers)
             df_reports.columns = df_reports.columns.str.strip()
-            
             for col in df_reports.columns:
                 if col in ["إسم", "اسم", "اسم التلميذ", "إسم التلميذ"]:
                     df_reports = df_reports.rename(columns={col: "الاسم"})
@@ -215,6 +242,10 @@ def load_data():
 
 df_students, df_reports, df_lessons = load_data()
 
+if not df_students.empty and 'القسم' in df_students.columns:
+    allowed_classes = ["TCSCF4", "1PSEF1", "1PSEF2"]
+    df_students = df_students[df_students['القسم'].isin(allowed_classes)]
+
 def get_lesson_ref(lesson_name, df_lessons):
     DRIVE_LINKS = {
         "الدرس 1": "https://drive.google.com/file/d/1WiHUq1rTQPX-VdzKvB6BT50K_vP3ZaQt/view?usp=sharing",
@@ -238,16 +269,16 @@ with st.sidebar:
         <div style='text-align: center; padding: 10px;'>
         <span style='font-size: 1.9rem;'>🎓</span>
         <h3 style='color: #FFD700 !important; font-size: 1.3rem; margin-top: 10px; text-shadow: 1px 1px 2px black;'>وزارة التربية الوطنية والتعليم الأولي والرياضة</h3>
-            <p style='color: #cbd5e1 !important; font-size: 0.95rem;'>ثانوية الزرقطوني التأهيلية</p>
+            <p style='color: #cbd5e1 !important; font-size: 0.95rem;'>ثانوية الزرقطوني التأهيلية - أزيلال</p>
         </div>
     """, unsafe_allow_html=True)
     st.divider()
     
     if st.session_state.auth:
         user_display = st.session_state.user.get('name', 'المستخدم')
-        st.success(f" مرحباً ب: \n\n**{user_display}**")
+        st.success(f" مرحباً بـ: \n\n**{user_display}**")
         if st.session_state.role == "student":
-            st.info(f"🏫 القسم: {st.session_state.user.get('class')}")
+            st.info(f"🏫 القسم: {st.session_state.user.get('class')}\n🔢 الشيفر: {st.session_state.user.get('student_code')}")
         st.divider()
         if st.button("🚪 تسجيل الخروج", use_container_width=True):
             for key in list(st.session_state.keys()): del st.session_state[key]
@@ -262,7 +293,7 @@ def admin_space(df_students, df_reports, df_lessons):
     st.markdown("""
         <div style='background: linear-gradient(#008E8E, #1a365d 0%, #C72C48 100%); padding: 30px; border-radius: 15px; margin-bottom: 25px; color: white; border: 2px solid #C5A059;'>
             <h1 class='golden-title' style='font-size: 2.3rem;'>👨‍🏫 الفضاء الرقمي للتدقيق الإداري والتربوي</h1>
-            <p class='golden-sub'>مرحباً بك ذ.عبد الباسط منصوري - تتبع ذكي لمراقبة وتصحيح دفاتر التلاميذ</p>
+            <p class='golden-sub'>مرحباً بك ذ.عبد الباسط منصوري - تتبع دقيق لدفاتر الأقسام الثلاثة (TCSCF4, 1PSEF1, 1PSEF2)</p>
         </div>
     """, unsafe_allow_html=True)
     
@@ -275,20 +306,20 @@ def admin_space(df_students, df_reports, df_lessons):
         with col2: st.markdown(f"<div class='metric-card'><p style='color:#64748b; font-weight:bold;'>الدفاتر المدققة</p><h2 style='margin:0; color:#1a365d;'>📥 {len(df_reports)}</h2></div>", unsafe_allow_html=True)
         with col3: 
             num_classes = df_students['القسم'].nunique() if not df_students.empty and 'القسم' in df_students.columns else 0
-            st.markdown(f"<div class='metric-card'><p style='color:#64748b; font-weight:bold;'>الأقسام</p><h2 style='margin:0; color:#1a365d;'>🏫 {num_classes}</h2></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='metric-card'><p style='color:#64748b; font-weight:bold;'>الأقسام النشطة</p><h2 style='margin:0; color:#1a365d;'>🏫 {num_classes}</h2></div>", unsafe_allow_html=True)
         
         if not df_reports.empty and 'القسم' in df_reports.columns:
-            fig = px.bar(df_reports.groupby('القسم').size().reset_index(name='عدد الإرسالات'), x='القسم', y='عدد الإرسالات', title="📊 تفاعل الأقسام والالتزام بالدفاتر الرقمية", color_discrete_sequence=['#1a365d'])
+            fig = px.bar(df_reports.groupby('القسم').size().reset_index(name='عدد الإرسالات'), x='القسم', y='عدد الإرسالات', title="📊 تفاعل الأقسام", color_discrete_sequence=['#1a365d'])
             st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
-        st.markdown("<div class='section-title'>📂 مركز إدارة المراجع السحابية</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>📂 مركز إدارة المراجع السحابية والدروس النموذجية</div>", unsafe_allow_html=True)
         lesson_choice = st.selectbox("اختر الدرس المستهدف بالتحديث أو الإضافة:", ["الدرس 1", "الدرس 2", "الدرس 3"])
         current_ref = get_lesson_ref(lesson_choice, df_lessons)
         st.info(f"📋 المرجع الحالي المحفوظ سحابياً للدرس:\n\n{current_ref}")
         
-        uploaded_ref_file = st.file_uploader(f"📸 📤 ارفع ملف الدرس المرجعي الرسمي:", type=['pdf', 'jpg', 'jpeg', 'png'], key="admin_file_uploader")
-        ref_note = st.text_area("أدخل عناصر الدرس الأساسية أو التوجيهات المكتوبة للذكاء الاصطناعي:", height=120, value=current_ref if "لا توجد ملاحظات" not in current_ref else "")
+        uploaded_ref_file = st.file_uploader(f"📸 📤 ارفع ملف الدرس المرجعي النموذجي الرسمي (PDF/صورة):", type=['pdf', 'jpg', 'jpeg', 'png'], key="admin_file_uploader")
+        ref_note = st.text_area("أدخل عناصر الدرس الأساسية والتوجيهات للذكاء الاصطناعي:", height=120, value=current_ref if "لا توجد ملاحظات" not in current_ref else "")
 
         if st.button("💾 حفظ ونشر الدرس في المنصة بشكل دائم", use_container_width=True):
             with st.spinner("جاري التحديث..."):
@@ -330,17 +361,13 @@ def admin_space(df_students, df_reports, df_lessons):
             st.info("لا توجد تقارير مرسلة حالياً.")
             
         st.divider()
-        
         st.markdown("<div class='section-title'>🗑️ لوحة الإلغاء والتصفير (منح فرصة ثانية للتلميذ)</div>", unsafe_allow_html=True)
-        st.write("يمكنك من هنا اختيار تلميذ معين لحذف تقاريره من قاعدة البيانات ليعيد المحاولة والإرسال:")
-        
         if not df_reports.empty and 'القسم' in df_reports.columns:
             available_classes = ["---"] + sorted(df_reports['القسم'].dropna().unique().tolist())
             chosen_class = st.selectbox("1️⃣ اختر قسم التلميذ المراد تصفيره:", available_classes, key="reset_class_select")
             
             if chosen_class != "---":
                 df_filtered_class = df_reports[df_reports['القسم'] == chosen_class]
-                
                 student_options = []
                 student_mapping = {}
                 
@@ -357,7 +384,6 @@ def admin_space(df_students, df_reports, df_lessons):
                 
                 if chosen_student_profile != "---":
                     target_massar_id = student_mapping[chosen_student_profile]
-                    
                     if st.button("🔥 تصفير وإعادة تعيين معطيات التلميذ الآن", use_container_width=True):
                         with st.spinner("جاري الاتصال السحابي وإلغاء القيود..."):
                             try:
@@ -369,7 +395,6 @@ def admin_space(df_students, df_reports, df_lessons):
                                 if all_rows and len(all_rows) > 1:
                                     headers = all_rows[0]
                                     old_records = all_rows[1:]
-                                    
                                     new_records = []
                                     deleted_count = 0
                                     
@@ -377,40 +402,34 @@ def admin_space(df_students, df_reports, df_lessons):
                                         if len(row) >= 5:
                                             row_massar = str(row[1]).strip().upper()
                                             row_lesson = str(row[4]).strip()
-                                            
                                             match_massar = (row_massar == target_massar_id)
                                             match_lesson = (target_lesson_to_reset == "كل الدروس" or row_lesson == target_lesson_to_reset)
-                                            
                                             if match_massar and match_lesson:
                                                 deleted_count += 1
                                                 continue
-                                        
                                         new_records.append(row)
                                     
                                     ws_reports.clear()
                                     ws_reports.update([headers] + new_records)
-                                    
                                     st.cache_data.clear()
-                                    st.success(f"✅ تم بنجاح تصفير وحذف ({deleted_count}) سجل للتلميذ. يمكنه الآن الدخول والإرسال من جديد بكل حرية!")
+                                    st.success(f"✅ تم بنجاح تصفير وحذف ({deleted_count}) سجل للتلميذ.")
                                     time.sleep(1)
                                     st.rerun()
-                                else:
-                                    st.error("الجدول فارغ بالفعل.")
                             except Exception as reset_err:
-                                st.error(f"حدث خطأ أثناء محاولة التصفير السحابي: {reset_err}")
+                                st.error(f"حدث خطأ أثناء التصفير: {reset_err}")
         else:
-            st.info("لا توجد بيانات كافية في السجلات لتفعيل ميزة التصفير.")
+            st.info("لا توجد بيانات كافية لتفعيل التصفير.")
 
     with tab4:
         st.markdown("<div class='section-title'>⚙️ إعدادات الصيانة والأمان</div>", unsafe_allow_html=True)
-        st.info("تم دمج نظام التصفير التلقائي الذكي أعلاه ليوفر عليك عناء الحذف اليدوي من Google Sheets.")
+        st.info("تم تفعيل التدقيق المجهري العميق للمحتوى مقارنة بالدرس النموذجي، مع رصد السطور والتعاريف الناقصة.")
 
 # --- واجهة التلميذ ---
 def student_space(df_students, df_reports, df_lessons):
     st.markdown("""
         <div style='background: linear-gradient(135deg, #10b981 0%, #1a365d 100%); padding: 35px; border-radius: 15px; margin-bottom: 25px; text-align: center; border: 2px solid #C5A059;'>
             <h2 class='golden-title' style='font-size: 2.5rem;'>🇲🇦 الفضاء الرقمي للتلميذات والتلاميذ</h2>
-            <p class='golden-sub'>منصة ذ.منصوري للتدقيق الفوري للدفاتر المدرسية مدعومة بالذكاء الاصطناعي (AI)</p>
+            <p class='golden-sub'>منصة ذ.منصوري للتدقيق المجهري للدفاتر المدرسية - الأقسام: TCSCF4, 1PSEF1, 1PSEF2</p>
         </div>
     """, unsafe_allow_html=True)
     
@@ -422,6 +441,7 @@ def student_space(df_students, df_reports, df_lessons):
     col_name = 'اسم التلميذ'
     col_id = 'رقم التلميذ'  
     col_birth = 'تاريخ الإزدياد' 
+    col_code = 'شيفر كلاس ستودنت'
 
     if not st.session_state.auth:
         st.markdown("<div class='section-title'>🔑 تسجيل الدخول الآمن لمنظومة التدقيق</div>", unsafe_allow_html=True)
@@ -441,11 +461,13 @@ def student_space(df_students, df_reports, df_lessons):
                     (df_students[col_birth] == input_birth)
                 ]
                 if not matched_student.empty:
+                    student_row = matched_student.iloc[0]
                     st.session_state.auth = True
                     st.session_state.user = {
-                        "name": str(matched_student.iloc[0][col_name]).strip(), 
+                        "name": str(student_row[col_name]).strip(), 
                         "class": sel_class,
-                        "massar": input_massar.strip().upper()
+                        "massar": input_massar.strip().upper(),
+                        "student_code": str(student_row.get(col_code, "غير محدد")).strip()
                     }
                     st.success("🎉 تم التحقق من الهوية بنجاح!")
                     st.rerun()
@@ -454,7 +476,10 @@ def student_space(df_students, df_reports, df_lessons):
     else:
         student_name = st.session_state.user['name']
         student_massar = st.session_state.user.get('massar', '')
-        st.success(f"🏫 مرحباً بالتلميذ(ة): **{student_name}** | رقم مسار: **{student_massar}** | القسم: **{st.session_state.user['class']}**")
+        student_class = st.session_state.user.get('class', '')
+        student_code = st.session_state.user.get('student_code', '')
+        
+        st.success(f"🏫 التلميذ(ة): **{student_name}** | القسم: **{student_class}** | الشيفر التسلسلي: **{student_code}**")
         
         student_all_submissions = pd.DataFrame()
         if not df_reports.empty and 'رقم مسار' in df_reports.columns:
@@ -480,12 +505,12 @@ def student_space(df_students, df_reports, df_lessons):
                 if l_sub in submitted_lessons:
                     pct = lesson_percentages.get(l_sub, "N/A")
                     if pct == "0%":
-                        status_text += f"🚨 تم تدقيق <b>{l_sub}</b> وتم رصد <b>مخالفة/تكرار صور أو محتوى مأخوذ من زميل آخر</b> (النسبة: <span style='color:white; background:red; padding:2px 6px; border-radius:4px;'><b>0%</b></span>)<br>"
+                        status_text += f"🚨 تم تدقيق <b>{l_sub}</b> وتم رصد <b>مخالفة أو خلل في الشيفر التسلسلي أو تطابق صور</b> (النسبة: <span style='color:white; background:red; padding:2px 6px; border-radius:4px;'><b>0%</b></span>)<br>"
                     else:
                         status_text += f"📉 نسبة إنجازك لـ <b>{l_sub}</b> هي: <span style='color:#e0f2fe; background:#1e3a8a; padding:2px 8px; border-radius:5px;'><b>{pct}</b></span><br>"
             st.markdown(f"<div class='status-box'>{status_text}</div>", unsafe_allow_html=True)
         else:
-            st.warning("لم تقم بإرسال أي دروس بعد. المرجو اختيار الدرس من التبويبات أسفله ورفع 13 صورة على الأقل.")
+            st.warning("لم تقم بإرسال أي دروس بعد. تأكد من ترقيم الصفحات وكتابة الشيفر التسلسلي الخاص بك بوضوح.")
 
         lesson_tabs = st.tabs(["📘 المجزوءة / الدرس 1", "📗 المجزوءة / الدرس 2", "📙 المجزوءة / الدرس 3"])
         
@@ -495,44 +520,39 @@ def student_space(df_students, df_reports, df_lessons):
                 
                 if l_name in submitted_lessons:
                     current_p = lesson_percentages.get(l_name, "N/A")
-                    
                     if current_p == "0%":
-                        st.error(f"🚨 **تنبيه نظام التدقيق والنزاهة الرقمية:**")
-                        st.markdown(f"<div style='background-color:#fee2e2; border-right:6px solid #dc2626; padding:15px; border-radius:8px; color:#991b1b; font-weight:bold;'>⚠️ لقد تم رفض هذا الإرسال وحصلت على نسبة 0% بسبب رصد تكرار بصرى أو تطابق خط الكتابة والمحتوى مع تلميذ آخر بالمؤسسة.</div>", unsafe_allow_html=True)
-                        st.markdown(f"### 📋 تفاصيل تقرير المخالفة المحفوظ إدارياً وتوبيخ الذكاء الاصطناعي:")
+                        st.error(f"🚨 **تنبيه نظام التدقيق:**")
+                        st.markdown(f"<div style='background-color:#fee2e2; border-right:6px solid #dc2626; padding:15px; border-radius:8px; color:#991b1b; font-weight:bold;'>⚠️ تم رفض هذا الإرسال وحصلت على نسبة 0% بسبب خلل في الشيفر التسلسلي داخل القسم أو تطابق الصور.</div>", unsafe_allow_html=True)
+                        st.markdown(f"### 📋 تقرير التدقيق المفصل:")
                         st.info(lesson_full_reports.get(l_name, "لا يوجد نص تقرير محفوظ."))
                     else:
-                        st.warning(f"ℹ️ **لقد أرسلت صور {l_name} مسبقاً** بنجاح، ونسبة إنجازك المحفوظة هي: **{current_p}**.")
-                        st.markdown(f"### 📋 تقرير التدقيق المخزن لـ {l_name}:")
+                        st.warning(f"ℹ️ **لقد أرسلت صور {l_name} مسبقاً**، ونسبة إنجازك المحفوظة هي: **{current_p}**.")
+                        st.markdown(f"### 📋 تقرير التدقيق المفصل والملاحظات الدقيقة:")
                         st.info(lesson_full_reports.get(l_name, "لا يوجد نص تقرير محفوظ."))
-                
                 else:
                     st.markdown(f"#### 📸 centre de dépôt des cahiers - {l_name}")
                     saved_lesson_reference = get_lesson_ref(l_name, df_lessons)
                     
                     up_files = st.file_uploader(
-                        f"اختر صور صفحات الدفتر لـ {l_name} (🚨 تنبيه: يشترط تحميل 13 صورة على الأقل)", 
+                        f"اختر صور صفحات الدفتر المرقمة لـ {l_name} (🚨 تنبيه: يشترط تحميل 13 صورة على الأقل متضمنة لشيفرك التسلسلي {student_code})", 
                         accept_multiple_files=True, 
                         key=f"up_{l_name}", 
                         type=['jpg','jpeg','png']
                     )
                     
-                    if st.button(f"بدء المعالجة والتدقيق الفوري لـ {l_name}", key=f"btn_{l_name}"):
+                    if st.button(f"بدء التدقيق المجهري الفوري لـ {l_name}", key=f"btn_{l_name}"):
                         if up_files:
                             if len(up_files) < 13:
-                                st.error(f"⚠️ **خطأ في معايير قبول الدفتر:** لقد قمت برفع ({len(up_files)}) صور فقط! ميثاق المادة يشترط رفع **14 صورة على الأقل** للدرس لضمان تدقيق المحتوى كاملاً.")
+                                st.error(f"⚠️ **خطأ في معايير قبول الدفتر:** لقد قمت برفع ({len(up_files)}) صور فقط! يشترط رفع **13 صورة على الأقل** للدرس.")
                             else:
-                                with st.spinner("🔄 جاري التحقق الفوري من سجلاتك وفحص جودة الصور..."):
+                                with st.spinner("🔄 جاري التحقق من الشيفر التسلسلي وضغط الصور..."):
                                     current_hashes = []
                                     optimized_images = []
                                     
-                                    # معالجة الصور وضغطها تلقائياً لتقليل الـ Tokens بنسبة 90%
                                     for f in up_files:
                                         f_bytes = f.read()
                                         f.seek(0)
                                         current_hashes.append(calculate_image_hash(f_bytes))
-                                        
-                                        # ضغط الصورة وتخفيف حجمها قبل إرسالها لـ Gemini API
                                         optimized_img = optimize_image_for_api(f)
                                         optimized_images.append(optimized_img)
                                     
@@ -545,21 +565,17 @@ def student_space(df_students, df_reports, df_lessons):
                                             live_headers = [h.strip() for h in live_rows[0]]
                                             df_live_reports = pd.DataFrame(live_rows[1:], columns=live_headers)
                                             df_live_reports.columns = df_live_reports.columns.str.strip()
-                                            for col in df_live_reports.columns:
-                                                if col in ["اسم", "إسم", "اسم التلميذ", "إسم التلميذ"]:
-                                                    df_live_reports = df_live_reports.rename(columns={col: "الاسم"})
                                         else:
                                             df_live_reports = pd.DataFrame(columns=["التاريخ", "رقم مسار", "الاسم", "القسم", "الدرس", "التقرير", "النسبة", "بصمات_الصور", "بصمة_الخط"])
                                     except Exception as check_err:
-                                        st.error(f"❌ تعذر الاتصال بالسيرفر للتحقق من الأرشيف: {check_err}")
+                                        st.error(f"❌ تعذر الاتصال بالسيرفر: {check_err}")
                                         st.stop()
                                 
+                                # فحص التكرار البصري
                                 cheater_detected = False
                                 original_student_name = ""
-                                
-                                if "بصمات_الصور" in df_live_reports.columns:
-                                    df_live_reports['massar_clean'] = df_live_reports['رقم مسار'].astype(str).str.strip().str.upper() if "رقم مسار" in df_live_reports.columns else ""
-                                        
+                                if "بصمات_الصور" in df_live_reports.columns and "رقم مسار" in df_live_reports.columns:
+                                    df_live_reports['massar_clean'] = df_live_reports['رقم مسار'].astype(str).str.strip().str.upper()
                                     for idx, row in df_live_reports.iterrows():
                                         if str(row['massar_clean']) == student_massar.upper():
                                             continue
@@ -569,84 +585,60 @@ def student_space(df_students, df_reports, df_lessons):
                                             for current_h in current_hashes:
                                                 if current_h in saved_hashes_list:
                                                     cheater_detected = True
-                                                    original_student_name = row['الاسم'] if 'الاسم' in row else "تلميذ آخر"
+                                                    original_student_name = row.get('الاسم', 'تلميذ آخر')
                                                     break
                                         if cheater_detected: break
 
                                 if cheater_detected:
-                                    st.error(
-                                        f"🚨 **نظام كشف الغش والسرقة الرقمية:** \n\n"
-                                        f"عذراً، هذه الصور تم إرسالها مسبقاً من طرف التلميذ(ة): **{original_student_name}**. \n"
-                                        f"لا يمكن لتلميذين إرسال نفس صور الدفتر! تم رصد محاولة التكرار وإلغاء العملية."
-                                    )
+                                    st.error(f"🚨 عذراً، هذه الصور تم إرسالها مسبقاً من طرف التلميذ(ة): **{original_student_name}**. ممنوع إعادة تصوير نفس الدفتر!")
                                 else:
-                                    with st.spinner("🔄 جاري قياس نسبة الإنجاز والتحقق من أصالة خط الكتابة مع الأرشيف..."):
+                                    with st.spinner("🔍 جاري إجراء التدقيق المجهري المقارن مع الدرس النموذجي..."):
                                         try:
                                             past_records_context = ""
-                                            if not df_live_reports.empty and 'الدرس' in df_live_reports.columns and 'بصمة_الخط' in df_live_reports.columns:
-                                                same_lesson_df = df_live_reports[df_live_reports['الدرس'] == l_name]
-                                                for idx, row in same_lesson_df.iterrows():
+                                            if not df_live_reports.empty and 'الدرس' in df_live_reports.columns and 'القسم' in df_live_reports.columns:
+                                                same_class_lesson_df = df_live_reports[
+                                                    (df_live_reports['الدرس'].astype(str).str.strip() == l_name) & 
+                                                    (df_live_reports['القسم'].astype(str).str.strip() == student_class)
+                                                ]
+                                                for idx, row in same_class_lesson_df.iterrows():
                                                     if str(row.get('massar_clean', '')).strip().upper() != student_massar.upper():
-                                                        past_records_context += f"- التلميذ(ة): {row.get('الاسم', 'مجهول')} | بصمة خطه الموثقة: {row.get('بصمة_الخط', 'لا يوجد')}\n\n"
+                                                        past_records_context += f"- زميل في نفس القسم ({student_class}) | بصمته: {row.get('بصمة_الخط', 'لا يوجد')}\n\n"
 
+                                            # --- Prompt المعدل للتدقيق المجهري المعمق والحرفي ---
                                             prompt_instructions = f"""
-                                            أنت مساعد أستاذ الرياضيات عبد الباسط منصوري بالثانوية التأهلية المغربية. 
-                                            التلميذ {student_name} (القسم: {st.session_state.user['class']}) أرسل صور دفتره لدرس ({l_name}).
+                                            أنت مساعد أستاذ الرياضيات والفيزياء عبد الباسط منصوري بالثانوية التأهيلية المغربية. 
+                                            التلميذ {student_name} ينتمي لقسم ({student_class})، ويمتلك داخل هذا القسم حصرياً الرقم التسلسلي: ({student_code}).
+                                            أرسل صور دفتره المرقمة لدرس ({l_name}).
                                             
-                                            المرجع والمخطط الملزم الذي حدده الأستاذ لك هو:
+                                            مهمتك الأساسية هي "التدقيق المجهري والعميق" للمحتوى مقارنة بالدرس النموذجي!
+                                            
+                                            المرجع والدرس النموذجي الملزم الذي حدده الأستاذ في جوجل درايف هو:
                                             \"\"\"{saved_lesson_reference}\"\"\"
                                             
-                                            ⚠️ أرشيف بصمات الخطوط للتلاميذ الآخرين الذين أرسلوا قبله لنفس الدرس:
+                                            ⚠️ أرشيف تلاميذ نفس القسم ({student_class}) فقط للتحقق من منع النقل:
                                             \"\"\"{past_records_context}\"\"\"
                                   
-                                            🚨 معيار صارم وحاسم ضد الغش والتحايل (تصوير نفس الدفتر الفعلي بهاتف آخر):
-                                            1. افحص الصور الحالية واستخرج "بصمة بصرية فريدة للخط والكتابة والتنسيق" في سطرين (تصف خصائص الخط، ألوان الأقلام، الرموز الرياضية، طريقة التسطير، وعيوب فريدة بالدفتر).
+                                            🚨 معايير التدقيق والنزاهة الصارمة:
+                                            1. **التحقق من الهوية والشيفر:** تأكد بصرياً من وجود الرقم التسلسلي ({student_code}) بوضوح في صفحات التلميذ داخل قسمه ({student_class}). إذا لم يوجد أو ظهر رقم تلميذ آخر، فاعتبره غشاً أو إهمالاً واكتب النسبة النهائية: 0%.
+                                            2. **التدقيق المجهري للنص والمضمون:** افحص صفحات التلميذ بدقة ومقارنتها بالدرس النموذجي المرجعي:
+                                               - هل استخرج التلميذ النص والفقرات كاملة؟
+                                               - دقق في العناوين والتعاريف والخاصيات الرياضية أو الفيزيائية. **إذا نسي التلميذ ولو سطراً واحداً في تعريفه أو عنواناً أساسياً أو فقرة، فاذكر ذلك بوضوح تام في تقريرك** (مثلاً: "نسيت السطر الثاني في التعريف الفلاني في العنوان الثاني"، أو "الفقرة المتعلقة بالخاصية الفلانية في الصفحة 3 ناقصة").
+                                               - لا تقبل النصف أو الإهمال؛ كن دقيقاً جداً في تحديد النقص.
+                                            3. **حساب نسبة الإنجاز:** بناءً على مقارنة محتوى دفتر التلميذ بالدرس النموذجي (التعاريف، الأمثلة، التمارين)، احسب بدقة النسبة المئوية (مثلاً 92%، 85%...).
+                                            4. **صياغة التقرير:** اكتب تقريراً تربوياً وتوجيهياً باللغة العربية موجهاً للتلميذ، يوضح له بدقة موطن النقص والإضافات التي يجب أن يصححها في دفتره.
                                             
-                                            2. قارن هذه الصور الحالية بـ "أرشيف بصمات الخطوط للتلاميذ الآخرين" المرفق بالأعلى. إذا وجدت تطابقاً بصرياً تاماً (أي أن هذه الصور تعود لنفس الدفتر المكتوب الذي استعمله تلميذ آخر سابقاً بالمؤسسة، والتلميذ الحالي يقوم فقط بإعادة تصوير الدفتر بهاتفه من زوايا أخرى للتحايل وسرقة مجهود صديقه)، فنفذ ما يلي فوراً:
-                                               - اكتب تقريراً حازماً وتوبيخياً تخبره فيه بأنه تم رصد سرقة دفتر مجهود تلميذ آخر ومخالفة ميثاق المادة والنزاهة الإدارية.
-                                               - وضع النسبة هكذا في السطر الأخير تماماً وبشكل حتمي:
-                                               النسبة النهائية: 0%
-                                            
-                                            3. إذا كانت الصور سليمة، مختلفة، وفريدة لدفتر التلميذ الخاص به:
-                                               - تفقد العناوين والفقرات والتمارين المكتوبة بدقة وقارنها بالدرس المرجعي.
-                                               - احسب بدقة "نسبة مئوية تقديرية" لإنجاز التلميذ لكتابة الدرس وحل التمارين.
-                                               - صغ تقريراً تربوياً مشجعاً وموجزاً باللغة العربية.
-                                               - يجب أن تنهي تقريرك بكتابة هذه العبارة بالنص في السطر الأخير تماماً:
+                                            5. **السطر الأخير (حتمي جداً):** يجب أن تنهي ردك حصرياً وبدقة بهاتين العبارتين في السطرين الاخيرين:
                                                النسبة النهائية: X%
-                                               
-                                            🚨 شرط برمجي إلزامي للتخزين المستقبلي: أضف دائماً في سطر مستقل في نهاية ردك العبارة التالية:
-                                            بصمة الخط المستخرجة حالياً: [ضع هنا الوصف البصري الفريد المستخرج للخط والتنسيق]
+                                               بصمة الخط المستخرجة حالياً: [القسم: {student_class} | الشيفر: {student_code} | وصف دقيق لخط التلميذ والصفحات المرقمة]
                                             """
                                             
-                                            model = genai.GenerativeModel("gemini-2.5-flash")
-                                            
-                                            response_success = False
-                                            report_text = ""
-                                            
-                                            # تشغيل مع المحاولة المتكررة الذكية والانتظار الموسع في حالة وجود ضغط عالي
-                                            for retry_attempt in range(3):
-                                                try:
-                                                    # نرسل الصور الخفيفة المضغوطة لتفادي حظر السيرفر
-                                                    res = model.generate_content([prompt_instructions, *optimized_images])
-                                                    report_text = res.text
-                                                    response_success = True
-                                                    break
-                                                except Exception as api_err:
-                                                    if "429" in str(api_err) or "ResourceExhausted" in str(api_err):
-                                                        st.warning(f"⚠️ الخادم ممتلئ حالياً. جاري الانتظار الذكي وإعادة المحاولة التلقائية في غضون ثوانٍ ({retry_attempt + 1}/3)...")
-                                                        time.sleep(25)  # زيادة مدة الانتظار لتفريغ الـ Tokens في السيرفر
-                                                    else:
-                                                        raise api_err
-                                            
-                                            if not response_success:
-                                                st.error("🚨 خادم الفحص السحابي لـ Google ممتلئ حالياً بسبب كثرة الضغط. يرجى إعادة الضغط على الزر بعد ثوانٍ قليلة.")
-                                                st.stop()
+                                            report_text = generate_content_with_fallback(prompt_instructions, optimized_images)
                                                 
                                             calculated_percentage = "100%"
                                             match_pct = re.search(r"النسبة\s+النهائية:\s*(\d+%)", report_text)
                                             if match_pct: calculated_percentage = match_pct.group(1)
 
-                                            extracted_handwriting_profile = "خط قياسي غير مصنف."
+                                            extracted_handwriting_profile = f"شيفر القسم: {student_code} - تدقيق مجهري دقيق."
                                             match_profile = re.search(r"بصمة الخط المستخرجة حالياً:\s*(.*)", report_text)
                                             if match_profile: extracted_handwriting_profile = match_profile.group(1).strip()
 
@@ -656,7 +648,7 @@ def student_space(df_students, df_reports, df_lessons):
                                                 datetime.now().strftime("%Y-%m-%d"),          
                                                 student_massar.upper(),                       
                                                 student_name,                                 
-                                                st.session_state.user['class'],               
+                                                student_class,                                
                                                 l_name,                                       
                                                 report_text,                                  
                                                 calculated_percentage,                        
@@ -667,14 +659,14 @@ def student_space(df_students, df_reports, df_lessons):
                                             st.cache_data.clear()
                                             
                                             if calculated_percentage == "0%":
-                                                st.error("🚨 تم رفض الملف وتسجيل نسبة 0% بسبب رصد مخالفة في المحتوى المرفوع!")
+                                                st.error("🚨 تم رفض الملف وتسجيل نسبة 0% بسبب خلل في الشيفر التسلسلي أو تطابق الصور!")
                                             else:
-                                                st.success(f"تم حفظ التقرير بنجاح! نسبة الإنجاز المسجلة للأستاذ: {calculated_percentage} ✅")
+                                                st.success(f"تم التدقيق بنجاح! نسبة الإنجاز المسجلة للأستاذ: {calculated_percentage} ✅")
                                                 
                                             st.rerun() 
                                             
                                         except Exception as gemini_err:
-                                            st.error(f"❌ حدث خطأ غير متوقع أثناء معالجة الدفتر: {gemini_err}")
+                                            st.error(f"❌ حدث خطأ أثناء معالجة الدفتر: {gemini_err}")
                         else:
                             st.warning("⚠️ المرجو تزويد المنصة بصور الدفتر أولاً.")                        
 
