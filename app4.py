@@ -242,7 +242,7 @@ def load_data():
 
 df_students, df_reports, df_lessons = load_data()
 
-# تصفية الأقسام المعتمدة حسب إكسيل الأستاذ
+# تصفية الأقسام الثلاثة المعتمدة
 if not df_students.empty and 'القسم' in df_students.columns:
     allowed_classes = ["TCSF-4", "1BACSEF-1", "1BACSEF-2"]
     df_students = df_students[df_students['القسم'].astype(str).str.strip().isin(allowed_classes)]
@@ -319,7 +319,7 @@ def admin_space(df_students, df_reports, df_lessons):
         current_ref = get_lesson_ref(lesson_choice, df_lessons)
         st.info(f"📋 المرجع الحالي المحفوظ سحابياً للدرس:\n\n{current_ref}")
         
-        uploaded_ref_file = st.file_uploader(f"📸 📤 ارفع ملف الدرس المرجعي النموذجي الرسمي (PDF/صورة):", type=['pdf', 'jpg', 'jpeg', 'png'], key="admin_file_uploader")
+        uploaded_ref_file = st.file_uploader(f"📸 📤 ارفع ملف الدرس المرجعي النموذجي الرسمي (PDF):", type=['pdf', 'jpg', 'jpeg', 'png'], key="admin_file_uploader")
         ref_note = st.text_area("أدخل عناصر الدرس الأساسية والتوجيهات للذكاء الاصطناعي:", height=120, value=current_ref if "لا توجد ملاحظات" not in current_ref else "")
 
         if st.button("💾 حفظ ونشر الدرس في المنصة بشكل دائم", use_container_width=True):
@@ -605,7 +605,6 @@ def student_space(df_students, df_reports, df_lessons):
                                                     if str(row.get('massar_clean', '')).strip().upper() != student_massar.upper():
                                                         past_records_context += f"- زميل في نفس القسم ({student_class}) | بصمته: {row.get('بصمة_الخط', 'لا يوجد')}\n\n"
 
-                                            # --- Prompt مخصص للبحث في الهوامش عن الرقم التسلسلي والتدقيق المجهري ---
                                             prompt_instructions = f"""
                                             أنت مساعد أستاذ الرياضيات والفيزياء عبد الباسط منصوري بالثانوية التأهيلية المغربية. 
                                             التلميذ {student_name} ينتمي لقسم ({student_class})، ورقم تشفيره التسلسلي الخاص به داخل هذا القسم هو: ({student_code}).
@@ -672,7 +671,7 @@ elif st.session_state.role == "admin":
             try:
                 if admin_pwd == st.secrets["credentials"]["prof_password"]:
                     st.session_state.auth = True
-                    st.session_state.user = {"name": "الأستاذ عبد الباسط المنصوري"}
+                    st.session_state.user = {"name": "الأستاذ عبد الباسط منصوري"}
                     st.success("مرحباً بك يا أستاذ!")
                     st.rerun()
                 else: st.error("❌ رمز المرور الإداري غير صحيح.")
