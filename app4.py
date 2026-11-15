@@ -126,7 +126,7 @@ def upload_pdf_to_drive(file_name, file_bytes):
     try:
         creds = get_gcp_credentials()
         drive_service = build('drive', 'v3', credentials=creds)
-        SHARED_FOLDER_ID = "1SwrvnMPTYLPSiV4B3Lyr6TiDCpurx_24"  # معرف المجلد المشترك الخاص بك
+        SHARED_FOLDER_ID = "1SwrvnMPTYLPSiV4B3Lyr6TiDCpurx_24"  # معرّف المجلد المشترك في الدرايف
         
         file_metadata = {
             'name': file_name, 
@@ -140,7 +140,7 @@ def upload_pdf_to_drive(file_name, file_bytes):
         file = drive_service.files().create(
             body=file_metadata, 
             media_body=media, 
-            fields='id, webViewLink, webContentLink', 
+            fields='id, webViewLink', 
             supportsAllDrives=True
         ).execute()
         
@@ -219,9 +219,9 @@ def load_data():
             df_students.columns = df_students.columns.str.strip()
             if "إسم التلميذ" in df_students.columns: df_students = df_students.rename(columns={"إسم التلميذ": "اسم التلميذ"})
         else:
-            df_students = pd.DataFrame(columns=["رقم التلميذ", "اسم التلميذ", "تاريخ الإزدياد", "القسم"])
+            df_students = pd.DataFrame(columns=["رقم التلميذ", "اسم التلميذ", "تاريخ الإزدياد", "القسم", "المستوى"])
     except:
-        df_students = pd.DataFrame(columns=["رقم التلميذ", "اسم التلميذ", "تاريخ الإزدياد", "القسم"])
+        df_students = pd.DataFrame(columns=["رقم التلميذ", "اسم التلميذ", "تاريخ الإزدياد", "القسم", "المستوى"])
 
     try:
         reports_worksheet = sh.worksheet("Reports")
@@ -299,7 +299,7 @@ def admin_space(df_students, df_reports, df_lessons):
         </div>
     """, unsafe_allow_html=True)
     
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 لوحة الإحصائيات", "📂 إدارة الدروس والملفات المرجعية (PDF)", "👥 تتبع سجلات التلاميذ وتصفيرها", "⚙️ الإعدادات"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 لوحة الإحصائيات", "📂 إدارة الدروس (12 درساً) وملفات PDF المرجعية", "👥 تتبع سجلات التلاميذ وتصفيرها", "⚙️ الإعدادات"])
     
     with tab1:
         st.markdown("<div class='section-title'>📈 المؤشرات التربوية العامة</div>", unsafe_allow_html=True)
@@ -315,25 +315,28 @@ def admin_space(df_students, df_reports, df_lessons):
             st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
-        st.markdown("<div class='section-title'>📂 مركز إدارة المراجع والملفات السحابية (12 درساً لكل مستوى)</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>📂 إدارة الدروس (12 درساً) ومجلد Google Drive</div>", unsafe_allow_html=True)
         
-        selected_level = st.selectbox("اختر المستهدف للمستوى الدراسي:", ["جذع مشترك علوم", "أولى باكالوريا علوم (1 باك SEF)"])
+        # اختيار المستويات الدراسية المطلوبة
+        selected_level = st.selectbox("اختر المستوى الدراسي المستهدف:", ["جذع مشترك علوم", "أولى باكالوريا علوم (1 باك SEF)"])
+        
+        # اختيار رقم الدرس من 1 إلى 12
         lesson_list_options = [f"الدرس {i}" for i in range(1, 13)]
-        selected_lesson_num = st.selectbox("اختر رقم الدرس (من 1 إلى 12):", lesson_list_options)
+        selected_lesson_num = st.selectbox("اختر الدرس (من الدرس 1 إلى الدرس 12):", lesson_list_options)
         
         current_note, current_pdf = get_lesson_ref_and_pdf(selected_level, selected_lesson_num, df_lessons)
-        st.info(f"📋 الملاحظات الحالية للدرس:\n\n{current_note}\n\n🔗 رابط PDF المخزن في Google Drive:\n{current_pdf if current_pdf else 'لا يوجد ملف مرفق حالياً'}")
+        st.info(f"📋 الملاحظات الحالية للدرس:\n\n{current_note}\n\n🔗 رابط ملف PDF المخزن في Google Drive:\n{current_pdf if current_pdf else 'لا يوجد ملف مرفق حالياً'}")
         
-        uploaded_ref_file = st.file_uploader(f"📤 ارفع ملف الدرس المرجعي الرسمي بصيغة PDF:", type=['pdf'], key="admin_pdf_uploader")
+        uploaded_ref_file = st.file_uploader(f"📤 ارفع ملف PDF المرجعي الرسمي لهذا الدرس:", type=['pdf'], key="admin_pdf_uploader")
         ref_note = st.text_area("أدخل التوجيهات أو العناصر الأساسية للدرس للذكاء الاصطناعي:", height=120, value=current_note if "لا توجد" not in current_note else "")
 
-        if st.button("💾 رفع ملف PDF إلى Drive وتحديث Google Sheets", use_container_width=True):
+        if st.button("💾 رفع الـ PDF إلى Google Drive وتحديث Google Sheets", use_container_width=True):
             with st.spinner("جاري رفع ملف PDF إلى Google Drive وتحديث السجلات..."):
                 drive_link = current_pdf
                 if uploaded_ref_file is not None:
                     file_name_prefix = "Tcs" if "جذع" in selected_level else "1Bac"
                     pdf_bytes = uploaded_ref_file.read()
-                    # رفع الملف حقيقة إلى Google Drive واستخراج الرابط المباشر
+                    # رفع الملف فعلياً إلى مجلد Google Drive المشترك واستخراج رابط العرض
                     uploaded_link = upload_pdf_to_drive(f"{file_name_prefix}_{selected_lesson_num}_{uploaded_ref_file.name}", pdf_bytes)
                     if uploaded_link:
                         drive_link = uploaded_link
@@ -363,7 +366,7 @@ def admin_space(df_students, df_reports, df_lessons):
                     ws_lessons.clear()
                     ws_lessons.update([headers] + rows)
                     st.cache_data.clear()
-                    st.success(f"🎉 تم حفظ رابط الـ PDF وتحديث بيانات الدرس ({selected_lesson_num} - {selected_level}) بنجاح في Google Sheets!")
+                    st.success(f"🎉 تم حفظ البيانات في Google Sheets ورابط الـ PDF بنجاح لـ ({selected_lesson_num} - {selected_level})!")
                 except Exception as ex:
                     st.error(f"خطأ أثناء تحديث الإكسيل: {ex}")
                 st.rerun()
@@ -439,7 +442,7 @@ def admin_space(df_students, df_reports, df_lessons):
 
     with tab4:
         st.markdown("<div class='section-title'>⚙️ إعدادات الصيانة والأمان</div>", unsafe_allow_html=True)
-        st.info("تم تحديث النظام ليدعم 12 درساً وقراءة ملفات PDF تلقائياً من Google Drive.")
+        st.info("تم ضبط النظام ليدعم مستويين دراسيين، و12 درساً لكل مستوى، والربط التلقائي بملفات Google Drive.")
 
 # --- واجهة التلميذ ---
 def student_space(df_students, df_reports, df_lessons):
@@ -529,7 +532,7 @@ def student_space(df_students, df_reports, df_lessons):
         else:
             st.warning("لم تقم بإرسال أي دروس بعد. المرجو اختيار الدرس من التبويبات أسفله ورفع 8 صور على الأقل.")
 
-        # عرض علامات التبويب للـ 12 درساً
+        # عرض علامات التبويب للـ 12 درساً الخاصة بالمستوى
         lesson_tabs = st.tabs([f"📚 الدرس {i}" for i in range(1, 13)])
         
         for i, tab in enumerate(lesson_tabs):
@@ -553,7 +556,7 @@ def student_space(df_students, df_reports, df_lessons):
                     saved_note, saved_pdf_link = get_lesson_ref_and_pdf(student_level, l_name, df_lessons)
                     
                     if saved_pdf_link:
-                        st.success(f"🔗 تم رصد ملف الـ PDF المرجعي الخاص بهذا الدرس في Google Drive وسيقوم الذكاء الاصطناعي بتحميله وقراءته مقارنة بدفرتك.")
+                        st.success(f"🔗 تم رصد ملف الـ PDF المرجعي الخاص بهذا الدرس في Google Drive وسيقوم الذكاء الاصطناعي بتحميله وقراءته ومقارنته بدفرتك.")
                     else:
                         st.warning("⚠️ تنبيه: لم يقم الأستاذ برفع ملف PDF مرجعي لهذا الدرس بعد، سيتم التدقيق بناءً على الملاحظات المكتوبة فقط.")
 
@@ -580,7 +583,7 @@ def student_space(df_students, df_reports, df_lessons):
                                         optimized_img = optimize_image_for_api(f)
                                         optimized_images.append(optimized_img)
                                     
-                                    # تحميل محتوى PDF حقيقة من Google Drive لمعالجته عبر الذكاء الاصطناعي
+                                    # تحميل محتوى PDF فعلياً من Google Drive
                                     pdf_bytes = None
                                     if saved_pdf_link:
                                         pdf_bytes = download_pdf_bytes_from_drive(saved_pdf_link)
