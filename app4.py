@@ -513,6 +513,7 @@ def student_space(df_students, df_reports, df_lessons):
             with tab:
                 l_name = f"الدرس {i+1}"
                 
+                # التحقق مما إذا كان التلميذ قد أرسل هذا الدرس مسبقاً
                 if l_name in submitted_lessons:
                     current_p = lesson_percentages.get(l_name, "N/A")
                     if current_p == "0%":
@@ -522,7 +523,7 @@ def student_space(df_students, df_reports, df_lessons):
                         st.info(lesson_full_reports.get(l_name, "لا يوجد نص تقرير محفوظ."))
                     else:
                         st.warning(f"🔒 **هذا الدرس مقفول:** لقد قمت بإرسال صور {l_name} مسبقاً بنجاح وتم تسجيل تقريرك (النسبة: {current_p}).")
-                        with st.expander("📄 اضغط هنا لعرض تقرير التصحيح المفصل والملاحظات الخاصة بك", expanded=True):
+                        with st.expander(f"📄 اضغط هنا لعرض تقرير التصحيح المفصل الخاص بـ {l_name}", expanded=True):
                             st.markdown(f"""
                             <div style='background-color: #f8fafc; padding: 20px; border-radius: 10px; border: 1px solid #cbd5e1; color: #1e293b;'>
                                 <h4>📊 نتيجة التدقيق: <b>{current_p}</b></h4>
@@ -532,6 +533,7 @@ def student_space(df_students, df_reports, df_lessons):
                             """, unsafe_allow_html=True)
                 
                 else:
+                    # إذا لم يرسله بعد، تظهر واجهة الرفع
                     st.markdown(f"#### 📸 centre de dépôt des cahiers - {l_name} ({student_level})")
                     saved_note, saved_pdf_link = get_lesson_ref_and_pdf(student_level, l_name, df_lessons)
                     
@@ -541,7 +543,7 @@ def student_space(df_students, df_reports, df_lessons):
                         st.warning("⚠️ تنبيه: لم يقم الأستاذ بإدخال رابط PDF لهذا الدرس بعد، سيتم التدقيق بناءً على الملاحظات المكتوبة فقط.")
 
                     up_files = st.file_uploader(
-                        f"اختر صور صفحات الدفتر لـ {l_name} (🚨 تنبيه: يشترط تحميل 8 صور على الأقل)", 
+                        f"اختر صور صفحات الدفتر لـ {l_name} (🚨 تنبيه: يشترط تحميل 8 صور على الأقل مع إظهار رقم مسار الخاص بك في الدفتر)", 
                         accept_multiple_files=True, 
                         key=f"up_{student_level}_{l_name}", 
                         type=['jpg','jpeg','png']
@@ -552,7 +554,7 @@ def student_space(df_students, df_reports, df_lessons):
                             if len(up_files) < 8:
                                 st.error(f"⚠️ **خطأ في معايير قبول الدفتر:** لقد قمت برفع ({len(up_files)}) صور فقط! ميثاق المادة يشترط رفع **8 صور على الأقل** للدرس.")
                             else:
-                                with st.spinner("🔄 جاري استخراج نص الـ PDF وقراءة صور الدفتر بدقة وسرعة..."):
+                                with st.spinner("🔄 جاري استخراج نص الـ PDF وقراءة صور الدفتر للتحقق من الهوية والمحتوى..."):
                                     current_hashes = []
                                     optimized_images = []
                                     
@@ -608,7 +610,7 @@ def student_space(df_students, df_reports, df_lessons):
                                         f"لا يمكن لتلميذين إرسال نفس صور الدفتر!"
                                     )
                                 else:
-                                    with st.spinner("🔄 جاري مقارنة نصوص الدفتر مع محتوى الـ PDF واستخراج التقارير..."):
+                                    with st.spinner("🔄 جاري مقارنة نصوص الدفتر والتحقق من تطابق رقم مسار مع محتوى الصور واستخراج التقارير..."):
                                         try:
                                             past_records_context = ""
                                             if not df_live_reports.empty and 'الدرس' in df_live_reports.columns and 'بصمة_الخط' in df_live_reports.columns:
@@ -619,7 +621,7 @@ def student_space(df_students, df_reports, df_lessons):
 
                                             prompt_instructions = f"""
                                             أنت مساعد أستاذ الرياضيات عبد الباسط منصوري بالثانوية التأهيلية المغربية. 
-                                            التلميذ {student_name} (المستوى: {student_level}، القسم: {st.session_state.user['class']}) أرسل صور دفتره لدرس ({l_name}).
+                                            التلميذ {student_name} (رقم مسار الخاص به: {student_massar}، المستوى: {student_level}، القسم: {st.session_state.user['class']}) أرسل صور دفتره لدرس ({l_name}).
                                             
                                             المحتوى النصي المستخرج من ملف الـ PDF المرجعي للأستاذ:
                                             \"\"\"{pdf_reference_text[:15000]}\"\"\"
@@ -630,12 +632,12 @@ def student_space(df_students, df_reports, df_lessons):
                                             أرشيف بصمات الخطوط للتلاميذ الآخرين:
                                             \"\"\"{past_records_context}\"\"`
                                   
-                                            التعليمات الصارمة:
-                                            1. قارن بدقة بين صور دفتر التلميذ والمحتوى النصي للدرس المرجعي أعلاه لاستخراج نسبة المطابقة وإنجاز الفقرات والتمارين والعناوين.
-                                            2. استخرج "بصمة بصرية فريدة للخط والكتابة" في سطرين.
-                                            3. إذا كان هناك تطابق تام مع دفتر تلميذ آخر (غش)، امنحه نسبة:
-                                               النسبة النهائية: 0%
-                                            4. إذا كان السجل سليماً، اكتب تقريراً مفصلاً للمقارنة بين محتوى الدرس ودفتر التلميذ، واختم بالسطر الحتمي:
+                                            التعليمات الصارمة والأساسية:
+                                            1. افحص بدقة صور الدفتر المرفقة للبحث عن رقم مسار أو الرقم التسلسلي للتلميذ ({student_massar}) المكتوب بخط اليد داخل صفحات الدفتر.
+                                            2. تحقق مما إذا كان الرقم الظاهر في الدفتر يتطابق مع رقم مسار التلميذ ({student_massar}). إذا تبين أن الدفتر يخص شخصاً آخر أو لا يحتوي على رقم مسار الصحيح، امنحه نسبة 0% واعتبرها حالة تزوير/عدم مطابقة الهوية.
+                                            3. قارن بدقة بين صور دفتر التلميذ والمحتوى النصي للدرس المرجعي أعلاه لاستخراج نسبة المطابقة وإنجاز الفقرات والتمارين.
+                                            4. استخرج "بصمة بصرية فريدة للخط والكتابة" في سطرين.
+                                            5. إذا كان السجل سليماً ومطابقاً، اكتب تقريراً مفصلاً للمقارنة بين محتوى الدرس ودفتر التلميذ، واختم بالسطر الحتمي:
                                                النسبة النهائية: X%
                                                
                                             بصمة الخط المستخرجة حالياً: [ضع هنا الوصف البصري الفريد للخط]
@@ -693,7 +695,7 @@ def student_space(df_students, df_reports, df_lessons):
                                             st.cache_data.clear()
                                             
                                             if calculated_percentage == "0%":
-                                                st.error("🚨 تم رفض الملف وتسجيل نسبة 0% بسبب رصد مخالفة في المحتوى!")
+                                                st.error("🚨 تم رفض الملف وتسجيل نسبة 0% بسبب رصد مخالفة أو عدم تطابق رقم مسار!")
                                             else:
                                                 st.success(f"تم تحليل المقارنة بنجاح وحفظ التقرير! نسبة الإنجاز المسجلة: {calculated_percentage} ✅")
                                                 
