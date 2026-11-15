@@ -1,7 +1,9 @@
 streamlit
 google-generativeai
+pillow
 pandas
 plotly
 gspread
 google-auth
-Pillow
+google-api-python-client
+pypdf
