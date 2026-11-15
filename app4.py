@@ -538,7 +538,7 @@ def student_space(df_students, df_reports, df_lessons):
                         f"اختر صور صفحات الدفتر المرقمة لـ {l_name} (🚨 تنبيه: يشترط تحميل 13 صورة على الأقل مع كتابة الرقم التسلسلي ({student_code}) في **هامش الصفحات**)", 
                         accept_multiple_files=True, 
                         key=f"up_{l_name}", 
-                        type=['jpg','jpeg','png']
+                        type=['jpg','jpeg','png','webp','heic']
                     )
                     
                     if st.button(f"بدء التدقيق المجهري الفوري لـ {l_name}", key=f"btn_{l_name}"):
