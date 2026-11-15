@@ -134,17 +134,19 @@ def calculate_image_hash(file_bytes):
 def optimize_image_for_api(uploaded_file):
     try:
         img = Image.open(uploaded_file)
-        max_size = 900  
+        # تصغير أبعاد الصورة لتقليل الحجم بشكل كبير جداً لتسهيل الرفع السريع
+        max_size = 800  
         if img.width > max_size or img.height > max_size:
             img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
         
         buffer = io.BytesIO()
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
-        img.save(buffer, format="JPEG", quality=65) 
+        # تخفيض الجودة لضمان مرور الملفات الكبيرة بسلاسة في الشبكة
+        img.save(buffer, format="JPEG", quality=60) 
         buffer.seek(0)
         return Image.open(buffer)
-    except:
+    except Exception:
         return Image.open(uploaded_file)
 
 def generate_content_with_fallback(prompt, images):
