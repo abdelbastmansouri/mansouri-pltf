@@ -347,9 +347,9 @@ def admin_space(df_students, df_reports, df_lessons):
         
         current_note, current_pdf_link, current_latex = get_lesson_ref_and_pdf(selected_level, selected_lesson_num, df_lessons)
         
-        st.info(f"📋 حالة الدرس في السجل الحالي:\n- المستوى: {selected_level}\n- الدرس: {selected_lesson_num}\n- الرابط الحالي: {current_pdf_link if current_pdf_link else 'لا يوجد رابط مدخل بعد'}\n- كود اللاتيك المخزن: {'متوفر وصاهز ✅' if current_latex else 'غير متوفر بعد'}")
+        st.info(f"📋 حالة الدرس في السجل الحالي:\n- المستوى: {selected_level}\n- الدرس: {selected_lesson_num}\n- الرابط الحالي: {current_pdf_link if current_pdf_link else 'لا يوجد رابط مدخل بعد (سيتم تفعيل البحث الذكي المستقل)'}\n- كود اللاتيك المخزن: {'متوفر وصاهز ✅' if current_latex else 'غير متوفر (سيعتمد الذكاء الاصطناعي على المناهج الرسمية)'}")
         
-        input_drive_link = st.text_input("3️⃣ أدخل رابط ملف الـ PDF من Google Drive هنا:", value=current_pdf_link).strip()
+        input_drive_link = st.text_input("3️⃣ أدخل رابط ملف الـ PDF من Google Drive هنا (اختياري):", value=current_pdf_link).strip()
         ref_note = st.text_area("أدخل ملاحظات أو توجيهات إضافية للذكاء الاصطناعي (اختياري):", height=100, value=current_note).strip()
 
         if st.button("💾 استخراج كود اللاتيك من PDF وحفظ السجل في Google Sheets", use_container_width=True):
@@ -480,7 +480,7 @@ def admin_space(df_students, df_reports, df_lessons):
 
     with tab4:
         st.markdown("<div class='section-title'>⚙️ إعدادات الصيانة والأمان</div>", unsafe_allow_html=True)
-        st.info("تم تفعيل نظام تخزين وترجمة كود اللاتيك (LaTeX Cache) مباشرة داخل Google Sheets لتسريع عملية الفحص الفوري للدفاتر.")
+        st.info("تم تفعيل نظام البحث الذكي المستقل (Autonomous AI Audit) في حال عدم توفر المرجع المكتوب.")
 
 # --- واجهة التلميذ ---
 def student_space(df_students, df_reports, df_lessons):
@@ -593,11 +593,9 @@ def student_space(df_students, df_reports, df_lessons):
                     saved_note, saved_pdf_link, saved_latex = get_lesson_ref_and_pdf(student_level, l_name, df_lessons)
                     
                     if saved_latex:
-                        st.success(f"⚡ تم رصد كود اللاتيك المرجعي لهذا الدرس مخزناً في Google Sheets، سيتم التحليل والمقارنة الفورية بدفتركت دون الحاجة لقراءة ملف الـ PDF!")
-                    elif saved_pdf_link:
-                        st.info(f"🔗 يتوفر رابط PDF ولكن لم يتم توليد كود اللاتيك بعد. سيتم اعتماده مباشرة.")
+                        st.success(f"⚡ تم رصد كود اللاتيك المرجعي لهذا الدرس مخزناً في Google Sheets، سيتم التحليل والمقارنة الفورية بدفتركت!")
                     else:
-                        st.warning("⚠️ تنبيه: لم يقم الأستاذ بإدخال محتوى مرجعي لهذا الدرس بعد.")
+                        st.info(f"🤖 **تنبيه ذكي:** لا يوجد مرجع مخزن لهذا الدرس حالياً. **سيقوم الذكاء الاصطناعي بالبحث والاعتماد على المقررات الرسمية المغربية (للـ {student_level}) للتدقيق تلقائياً!**")
 
                     up_files = st.file_uploader(
                         f"اختر صور صفحات الدفتر لـ {l_name} (🚨 تنبيه: يشترط تحميل 8 صور على الأقل)", 
@@ -606,12 +604,12 @@ def student_space(df_students, df_reports, df_lessons):
                         type=['jpg','jpeg','png']
                     )
                     
-                    if st.button(f"بدء المعالجة والتدقيق الفوري وتحليل اللاتيك لـ {l_name}", key=f"btn_{student_level}_{l_name}"):
+                    if st.button(f"بدء المعالجة والتدقيق الفوري لـ {l_name}", key=f"btn_{student_level}_{l_name}"):
                         if up_files:
                             if len(up_files) < 8:
                                 st.error(f"⚠️ **خطأ في معايير قبول الدفتر:** لقد قمت برفع ({len(up_files)}) صور فقط! ميثاق المادة يشترط رفع **8 صور على الأقل** للدرس.")
                             else:
-                                with st.spinner("🔄 جاري قراءة صور الدفتر ومقارنتها مباشرة مع مرجع اللاتيك المخزن في Google Sheets..."):
+                                with st.spinner("🔄 جاري قراءة صور الدفتر ومعالجة المحتوى علمياً بالذكاء الاصطناعي..."):
                                     current_hashes = []
                                     optimized_images = []
                                     
@@ -622,7 +620,11 @@ def student_space(df_students, df_reports, df_lessons):
                                         optimized_img = optimize_image_for_api(f)
                                         optimized_images.append(optimized_img)
                                     
-                                    reference_content_for_ai = saved_latex if saved_latex else saved_note
+                                    # الخاصية الجديدة: إذا لم يوجد مرجع، الذكاء الاصطناعي يستنتج المنهج رسمياً
+                                    if saved_latex:
+                                        reference_content_for_ai = f"مرجع اللاتيك المعتمد من الأستاذ:\n{saved_latex}"
+                                    else:
+                                        reference_content_for_ai = f"⚠️ (ملاحظة: لم يحدد الأستاذ مرجعاً بعد). اعتمد على المقررات الرسمية للوزارة المغربية في مادة الرياضيات والفيزياء لمستوى ({student_level}) لـ ({l_name}) لتدقيق الفقرات والتعريفات والتمارين الموجودة في صور دفتر التلميذ."
 
                                     try:
                                         client = get_gspread_client()
@@ -665,7 +667,7 @@ def student_space(df_students, df_reports, df_lessons):
                                         f"لا يمكن لتلميذين إرسال نفس صور الدفتر!"
                                     )
                                 else:
-                                    with st.spinner("🔄 جاري مطابقة صور الدفتر مع مرجع اللاتيك واستخراج التقارير بدقة فائقة..."):
+                                    with st.spinner("🔄 جاري مطابقة صور الدفتر علمياً واستخراج التقارير بدقة فائقة..."):
                                         try:
                                             past_records_context = ""
                                             if not df_live_reports.empty and 'الدرس' in df_live_reports.columns and 'بصمة_الخط' in df_live_reports.columns:
@@ -678,18 +680,17 @@ def student_space(df_students, df_reports, df_lessons):
                                             أنت مساعد أستاذ الرياضيات عبد الباسط منصوري بالثانوية التأهيلية المغربية. 
                                             التلميذ {student_name} (المستوى: {student_level}، القسم: {st.session_state.user['class']}) أرسل صور دفتره لدرس ({l_name}).
                                             
-                                            المرجع الأساسي للدرس (كود اللاتيك والملاحظات المستخرجة والمخزنة في السجل):
-                                            \"\"\"{reference_content_for_ai[:15000] if reference_content_for_ai else "لا يوجد مرجع مكتوب، اعتمد المعيار العام للمادة."}\"\"\"
+                                            {reference_content_for_ai}
 
                                             أرشيف بصمات الخطوط للتلاميذ الآخرين:
                                             \"\"\"{past_records_context}\"\"\"
                                   
                                             التعليمات الصارمة:
-                                            1. قارن بدقة بين صور دفتر التلميذ ومرجع اللاتيك أعلاه لاستخراج نسبة المطابقة وإنجاز الفقرات والتمارين والعناوين.
+                                            1. قم بتحليل صور دفتر التلميذ بدقة، وتأكد من شمولية الفقرات والعناوين والتعريفات والتمارين الخاصة بهذا الدرس حسب المناهج الرسمية المغربية.
                                             2. استخرج "بصمة بصرية فريدة للخط والكتابة" في سطرين.
                                             3. إذا كان هناك تطابق تام مع دفتر تلميذ آخر (غش)، امنحه نسبة:
                                                النسبة النهائية: 0%
-                                            4. إذا كان السجل سليماً، اكتب تقريراً مفصلاً للمقارنة، واختم بالسطر الحتمي:
+                                            4. إذا كان السجل سليماً، اكتب تقريراً مفصلاً لمدى استيعاب التلميذ للدرس، واختم بالسطر الحتمي:
                                                النسبة النهائية: X%
                                                
                                             بصمة الخط المستخرجة حالياً: [ضع هنا الوصف البصري الفريد للخط]
