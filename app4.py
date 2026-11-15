@@ -11,6 +11,7 @@ import io
 import time
 import re  
 import hashlib 
+from pypdf import PdfReader
 
 # --- 1. الإعدادات الأولية وإضفاء الطابع الاحترافي للوزارة ---
 st.set_page_config(
@@ -128,10 +129,11 @@ def extract_file_id_from_drive_link(link):
         return match_id.group(1)
     return None
 
-def download_pdf_bytes_from_drive(drive_link):
+@st.cache_data(ttl=3600)
+def extract_text_from_drive_pdf(drive_link):
     file_id = extract_file_id_from_drive_link(drive_link)
     if not file_id:
-        return None
+        return ""
     try:
         creds = get_gcp_credentials()
         drive_service = build('drive', 'v3', credentials=creds)
@@ -143,10 +145,17 @@ def download_pdf_bytes_from_drive(drive_link):
         while not done:
             status, done = downloader.next_chunk()
         fh.seek(0)
-        return fh.read()
+        
+        reader = PdfReader(fh)
+        extracted_text = ""
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                extracted_text += text + "\n"
+        return extracted_text.strip()
     except Exception as e:
-        print(f"Error downloading PDF from Drive: {e}")
-        return None
+        print(f"Error reading PDF from Drive: {e}")
+        return ""
 
 def calculate_image_hash(file_bytes):
     return hashlib.md5(file_bytes).hexdigest()
@@ -154,14 +163,14 @@ def calculate_image_hash(file_bytes):
 def optimize_image_for_api(uploaded_file):
     try:
         img = Image.open(uploaded_file)
-        max_size = 1200
+        max_size = 900
         if img.width > max_size or img.height > max_size:
             img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
         
         buffer = io.BytesIO()
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
-        img.save(buffer, format="JPEG", quality=75)
+        img.save(buffer, format="JPEG", quality=70)
         buffer.seek(0)
         return Image.open(buffer)
     except:
@@ -288,7 +297,7 @@ def admin_space(df_students, df_reports, df_lessons):
         st.markdown("<div class='section-title'>📂 إدخال وربط روابط الدروس (Google Drive)</div>", unsafe_allow_html=True)
         
         # 1. اختيار المستوى الدراسي أولاً
-        selected_level = st.selectbox("1️⃣ اختر المستوى الدراسي:", ["جذع مشترك علوم", "1 باكالوريا علوم تجريبية (1 باك SEF)"])
+        selected_level = st.selectbox("1️⃣ اختر المستوى الدراسي:", ["جذع مشترك علوم", "أولى باكالوريا علوم (1 باك SEF)"])
         
         # 2. تنبثق خانة لاختيار الدرس (الدرس 1 إلى الدرس 12)
         lesson_list_options = [f"الدرس {i}" for i in range(1, 13)]
@@ -521,7 +530,7 @@ def student_space(df_students, df_reports, df_lessons):
                     saved_note, saved_pdf_link = get_lesson_ref_and_pdf(student_level, l_name, df_lessons)
                     
                     if saved_pdf_link:
-                        st.success(f"🔗 تم رصد رابط ملف الـ PDF المرجعي لهذا الدرس، وسيقوم الذكاء الاصطناعي بتحميله وقراءته ومقارنته بدفرتك.")
+                        st.success(f"🔗 تم رصد رابط ملف الـ PDF المرجعي الخاص بهذا الدرس، وسيقوم الذكاء الاصطناعي باستخراج نصه وتحليله مقارنة بدفرتك.")
                     else:
                         st.warning("⚠️ تنبيه: لم يقم الأستاذ بإدخال رابط PDF لهذا الدرس بعد، سيتم التدقيق بناءً على الملاحظات المكتوبة فقط.")
 
@@ -537,7 +546,7 @@ def student_space(df_students, df_reports, df_lessons):
                             if len(up_files) < 8:
                                 st.error(f"⚠️ **خطأ في معايير قبول الدفتر:** لقد قمت برفع ({len(up_files)}) صور فقط! ميثاق المادة يشترط رفع **8 صور على الأقل** للدرس.")
                             else:
-                                with st.spinner("🔄 جاري تحميل وتحليل ملف PDF من رابط Google Drive وفحص صور الدفتر..."):
+                                with st.spinner("🔄 جاري استخراج نص الـ PDF وقراءة صور الدفتر بدقة وسرعة..."):
                                     current_hashes = []
                                     optimized_images = []
                                     
@@ -548,9 +557,10 @@ def student_space(df_students, df_reports, df_lessons):
                                         optimized_img = optimize_image_for_api(f)
                                         optimized_images.append(optimized_img)
                                     
-                                    pdf_bytes = None
+                                    # استخراج النص من رابط Google Drive للـ PDF بسرعة فائقة
+                                    pdf_reference_text = ""
                                     if saved_pdf_link:
-                                        pdf_bytes = download_pdf_bytes_from_drive(saved_pdf_link)
+                                        pdf_reference_text = extract_text_from_drive_pdf(saved_pdf_link)
 
                                     try:
                                         client = get_gspread_client()
@@ -593,7 +603,7 @@ def student_space(df_students, df_reports, df_lessons):
                                         f"لا يمكن لتلميذين إرسال نفس صور الدفتر!"
                                     )
                                 else:
-                                    with st.spinner("🔄 جاري مقارنة نصوص الدفتر مع ملف الـ PDF المرجعي واستخراج التقرير..."):
+                                    with st.spinner("🔄 جاري مقارنة نصوص الدفتر مع محتوى الـ PDF واستخراج التقارير..."):
                                         try:
                                             past_records_context = ""
                                             if not df_live_reports.empty and 'الدرس' in df_live_reports.columns and 'بصمة_الخط' in df_live_reports.columns:
@@ -606,52 +616,50 @@ def student_space(df_students, df_reports, df_lessons):
                                             أنت مساعد أستاذ الرياضيات عبد الباسط منصوري بالثانوية التأهيلية المغربية. 
                                             التلميذ {student_name} (المستوى: {student_level}، القسم: {st.session_state.user['class']}) أرسل صور دفتره لدرس ({l_name}).
                                             
+                                            المحتوى النصي المستخرج من ملف الـ PDF المرجعي للأستاذ:
+                                            \"\"\"{pdf_reference_text[:15000]}\"\"\"
+
                                             الملاحظات الإضافية المحددة من الأستاذ:
                                             \"\"\"{saved_note}\"\"\"
                                             
                                             أرشيف بصمات الخطوط للتلاميذ الآخرين:
-                                            \"\"\"{past_records_context}\"\"`
+                                            \"\"\"{past_records_context}\"\"\"
                                   
                                             التعليمات الصارمة:
-                                            1. افحص بدقة محتوى ملف الـ PDF المستخرج من رابط Google Drive ومقارنته بصور دفتر التلميذ.
-                                            2. استخرج النص من صور الدفتر وقارنه بمحتوى ملف الـ PDF لاستخراج نسبة المطابقة وإنجاز التمارين والعناوين بدقة.
-                                            3. استخرج "بصمة بصرية فريدة للخط والكتابة" في سطرين.
-                                            4. إذا كان هناك تطابق تام مع دفتر تلميذ آخر (غش)، امنحه نسبة:
+                                            1. قارن بدقة بين صور دفتر التلميذ والمحتوى النصي للدرس المرجعي أعلاه لاستخراج نسبة المطابقة وإنجاز الفقرات والتمارين والعناوين.
+                                            2. استخرج "بصمة بصرية فريدة للخط والكتابة" في سطرين.
+                                            3. إذا كان هناك تطابق تام مع دفتر تلميذ آخر (غش)، امنحه نسبة:
                                                النسبة النهائية: 0%
-                                            5. إذا كان السجل سليماً، اكتب تقريراً مفصلاً للمقارنة بين محتوى الـ PDF ودفتر التلميذ، واختم بالسطر الحتمي:
+                                            4. إذا كان السجل سليماً، اكتب تقريراً مفصلاً للمقارنة بين محتوى الدرس ودفتر التلميذ، واختم بالسطر الحتمي:
                                                النسبة النهائية: X%
                                                
                                             بصمة الخط المستخرجة حالياً: [ضع هنا الوصف البصري الفريد للخط]
                                             """
                                             
                                             model = genai.GenerativeModel("gemini-2.5-flash")
-                                            
-                                            content_payload = [prompt_instructions]
-                                            if pdf_bytes:
-                                                content_payload.append({
-                                                    "mime_type": "application/pdf",
-                                                    "data": pdf_bytes
-                                                })
-                                            content_payload.extend(optimized_images)
+                                            content_payload = [prompt_instructions] + optimized_images
                                             
                                             response_success = False
                                             report_text = ""
                                             
                                             for retry_attempt in range(3):
                                                 try:
-                                                    res = model.generate_content(content_payload)
+                                                    res = model.generate_content(
+                                                        content_payload,
+                                                        request_options={"timeout": 120}
+                                                    )
                                                     report_text = res.text
                                                     response_success = True
                                                     break
                                                 except Exception as api_err:
-                                                    if "429" in str(api_err) or "ResourceExhausted" in str(api_err):
-                                                        st.warning(f"⚠️ الخادم ممتلئ، جاري إعادة المحاولة ({retry_attempt + 1}/3)...")
-                                                        time.sleep(25)
+                                                    if any(err_code in str(api_err) for err_code in ["429", "504", "ResourceExhausted", "DeadlineExceeded"]):
+                                                        st.warning(f"⚠️ الخادم مشغول، جاري إعادة المحاولة ({retry_attempt + 1}/3)...")
+                                                        time.sleep(10)
                                                     else:
                                                         raise api_err
                                             
                                             if not response_success:
-                                                st.error("🚨 خادم الفحص السحابي ممتلئ حالياً. يرجى المحاولة بعد قليل.")
+                                                st.error("🚨 خادم الفحص السحابي ممتلئ أو استغرق وقتاً طويلاً. يرجى المحاولة بعد قليل.")
                                                 st.stop()
                                                 
                                             calculated_percentage = "100%"
