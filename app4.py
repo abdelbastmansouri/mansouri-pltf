@@ -269,7 +269,6 @@ def load_data():
             df_lessons = pd.DataFrame(lessons_rows[1:], columns=lessons_headers)
             df_lessons.columns = df_lessons.columns.str.strip()
         else:
-            # إضافة عمود جديد خاص بكود اللاتيك المستخلص مسبقاً لتخزينه في غوغل شيت
             df_lessons = pd.DataFrame(columns=["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "كود_لاتيك_المرجع", "تاريخ_التحديث"])
     except:
         df_lessons = pd.DataFrame(columns=["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "كود_لاتيك_المرجع", "تاريخ_التحديث"])
@@ -359,10 +358,8 @@ def admin_space(df_students, df_reports, df_lessons):
             else:
                 with st.spinner("🔄 جاري استخراج النص من ملف الـ PDF وتحويله إلى كود لاتيك احترافي بواسطة الذكاء الاصطناعي..."):
                     try:
-                        # 1. استخراج النص الخام من ملف الـ PDF عبر الد్రايف
                         raw_pdf_text = extract_text_from_drive_pdf(input_drive_link)
                         
-                        # 2. توليد وتحويل النص إلى كود لاتيك (LaTeX) منظم باستخدام الذكاء الاصطناعي لتخزينه في غوغل شيت
                         latex_prompt = f"""
                         أنت خبير رياضيات ومنظّم محتوى بصيغة LaTeX. 
                         قم بتحويل محتوى هذا الدرس المستخرج من ملف الـ PDF إلى كود LaTeX منظم ودقيق جداً (يتضمن العناوين، التعريفات، الخاصيات، والتمارين إن وجدت):
@@ -371,33 +368,43 @@ def admin_space(df_students, df_reports, df_lessons):
                         """
                         generated_latex_code = generate_content_with_fallback([latex_prompt])
 
-                        # 3. حفظ المعطيات في Google Sheets (جدول Lessons)
                         client = get_gspread_client()
                         sh = client.open("les classes")
                         ws_lessons = sh.worksheet("Lessons")
                         all_vals = ws_lessons.get_all_values()
-                        headers = all_vals[0] if all_vals else ["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "كود_لاتيك_المرجع", "تاريخ_التحديث"]
+                        headers = [h.strip() for h in all_vals[0]] if all_vals else ["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "كود_لاتيك_المرجع", "تاريخ_التحديث"]
                         rows = all_vals[1:] if all_vals else []
                         
                         updated = False
                         for row in rows:
                             if len(row) >= 2 and row[0].strip() == selected_level.strip() and row[1].strip() == selected_lesson_num.strip():
-                                # التأكد من طول الصف لتحديث كود اللاتيك
-                                while len(row) < 6:
+                                while len(row) < len(headers):
                                     row.append("")
-                                row[2] = ref_note
-                                row[3] = input_drive_link
-                                row[4] = generated_latex_code
-                                row[5] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                                    
+                                header_map = {h: idx for idx, h in enumerate(headers)}
+                                if "الملاحظات_المرجعية" in header_map: row[header_map["الملاحظات_المرجعية"]] = ref_note
+                                if "رابط_PDF" in header_map: row[header_map["رابط_PDF"]] = input_drive_link
+                                if "كود_لاتيك_المرجع" in header_map: row[header_map["كود_لاتيك_المرجع"]] = generated_latex_code
+                                if "تاريخ_التحديث" in header_map: row[header_map["تاريخ_التحديث"]] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                                
                                 updated = True
                                 break
+                                
                         if not updated: 
-                            rows.append([selected_level, selected_lesson_num, ref_note, input_drive_link, generated_latex_code, datetime.now().strftime("%Y-%m-%d %H:%M")])
+                            new_row_data = [""] * len(headers)
+                            header_map = {h: idx for idx, h in enumerate(headers)}
+                            if "المستوى" in header_map: new_row_data[header_map["المستوى"]] = selected_level
+                            if "الدرس" in header_map: new_row_data[header_map["الدرس"]] = selected_lesson_num
+                            if "الملاحظات_المرجعية" in header_map: new_row_data[header_map["الملاحظات_المرجعية"]] = ref_note
+                            if "رابط_PDF" in header_map: new_row_data[header_map["رابط_PDF"]] = input_drive_link
+                            if "كود_لاتيك_المرجع" in header_map: new_row_data[header_map["كود_لاتيك_المرجع"]] = generated_latex_code
+                            if "تاريخ_التحديث" in header_map: new_row_data[header_map["تاريخ_التحديث"]] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                            rows.append(new_row_data)
                         
                         ws_lessons.clear()
                         ws_lessons.update([headers] + rows)
                         st.cache_data.clear()
-                        st.success(f"🎉 تم بنجاح استخراج كود اللاتيك وحفظه سحابياً في Google Sheets لـ ({selected_lesson_num} - {selected_level})!")
+                        st.success(f"🎉 تم بنجاح استخراج كود اللاتيك وحفظه في مكانه الصحيح بـ Google Sheets لـ ({selected_lesson_num} - {selected_level})!")
                     except Exception as ex:
                         st.error(f"خطأ أثناء استخراج اللاتيك أو التحديث السحابي: {ex}")
                     st.rerun()
@@ -615,7 +622,6 @@ def student_space(df_students, df_reports, df_lessons):
                                         optimized_img = optimize_image_for_api(f)
                                         optimized_images.append(optimized_img)
                                     
-                                    # قراءة المحتوى المرجعي مباشرة من غوغل شيت (كود اللاتيك أو النص الملاحظات) دون الذهاب لملف الـ PDF نهائياً لتجنب Deadline Exceeded
                                     reference_content_for_ai = saved_latex if saved_latex else saved_note
 
                                     try:
@@ -691,7 +697,6 @@ def student_space(df_students, df_reports, df_lessons):
                                             
                                             content_payload = [prompt_instructions] + optimized_images
                                             
-                                            # استدعاء دالة التدوير الآمن مع مهلة 300 ثانية
                                             report_text = generate_content_with_fallback(content_payload)
                                                 
                                             calculated_percentage = "100%"
