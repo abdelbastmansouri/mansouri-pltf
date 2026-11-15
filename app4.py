@@ -104,7 +104,7 @@ def get_custom_bg():
 
 st.markdown(get_custom_bg(), unsafe_allow_html=True)
 
-# دالة التدوير التلقائي للمفاتيح والنماذج لتجاوز نفاد الرصيد (Quota & Rate Limits)
+# دالة التدوير التلقائي للمفاتيح والنماذج مع مهلة 300 ثانية لتجنب Deadline Exceeded
 def generate_content_with_fallback(content_payload):
     keys = []
     try:
@@ -131,14 +131,14 @@ def generate_content_with_fallback(content_payload):
                 
                 response = model.generate_content(
                     content_payload,
-                    request_options={"timeout": 120}
+                    request_options={"timeout": 300}
                 )
                 if response and response.text:
                     return response.text
             except Exception as e:
                 err_str = str(e)
                 last_error = e
-                if any(err_code in err_str for err_code in ["429", "504", "ResourceExhausted", "QuotaExceeded"]):
+                if any(err_code in err_str for err_code in ["429", "504", "ResourceExhausted", "QuotaExceeded", "DeadlineExceeded"]):
                     continue
                 else:
                     continue
@@ -146,7 +146,6 @@ def generate_content_with_fallback(content_payload):
     raise Exception(f"❌ تعذرت المعالجة حتى بعد تدوير المفاتيح والنماذج. الخطأ الأخير: {last_error}")
 
 try:
-    # تهيئة أولية افتراضية للمفتاح الأول إن وجد
     if "api_keys" in st.secrets and len(st.secrets["api_keys"]) > 0:
         genai.configure(api_key=st.secrets["api_keys"][0])
     elif "GEMINI_API_KEY" in st.secrets:
@@ -208,14 +207,14 @@ def calculate_image_hash(file_bytes):
 def optimize_image_for_api(uploaded_file):
     try:
         img = Image.open(uploaded_file)
-        max_size = 900
+        max_size = 800
         if img.width > max_size or img.height > max_size:
             img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
         
         buffer = io.BytesIO()
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
-        img.save(buffer, format="JPEG", quality=70)
+        img.save(buffer, format="JPEG", quality=60)
         buffer.seek(0)
         return Image.open(buffer)
     except:
@@ -270,9 +269,10 @@ def load_data():
             df_lessons = pd.DataFrame(lessons_rows[1:], columns=lessons_headers)
             df_lessons.columns = df_lessons.columns.str.strip()
         else:
-            df_lessons = pd.DataFrame(columns=["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "تاريخ_التحديث"])
+            # إضافة عمود جديد خاص بكود اللاتيك المستخلص مسبقاً لتخزينه في غوغل شيت
+            df_lessons = pd.DataFrame(columns=["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "كود_لاتيك_المرجع", "تاريخ_التحديث"])
     except:
-        df_lessons = pd.DataFrame(columns=["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "تاريخ_التحديث"])
+        df_lessons = pd.DataFrame(columns=["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "كود_لاتيك_المرجع", "تاريخ_التحديث"])
         
     return df_students, df_reports, df_lessons
 
@@ -286,8 +286,9 @@ def get_lesson_ref_and_pdf(level_name, lesson_name, df_lessons):
         if not match_row.empty:
             note = str(match_row.iloc[0].get("الملاحظات_المرجعية", ""))
             pdf_link = str(match_row.iloc[0].get("رابط_PDF", ""))
-            return note, pdf_link
-    return "", ""
+            latex_code = str(match_row.iloc[0].get("كود_لاتيك_المرجع", "")) if "كود_لاتيك_المرجع" in match_row.columns else ""
+            return note, pdf_link, latex_code
+    return "", "", ""
 
 # --- القائمة الجانبية ---
 with st.sidebar:
@@ -323,7 +324,7 @@ def admin_space(df_students, df_reports, df_lessons):
         </div>
     """, unsafe_allow_html=True)
     
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 لوحة الإحصائيات", "📂 ربط وإدارة روابط الدروس (Google Drive)", "👥 تتبع سجلات التلاميذ وتصفيرها", "⚙️ الإعدادات"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 لوحة الإحصائيات", "📂 ربط وإدارة روابط الدروس وكود اللاتيك (Google Drive)", "👥 تتبع سجلات التلاميذ وتصفيرها", "⚙️ الإعدادات"])
     
     with tab1:
         st.markdown("<div class='section-title'>📈 المؤشرات التربوية العامة</div>", unsafe_allow_html=True)
@@ -339,49 +340,66 @@ def admin_space(df_students, df_reports, df_lessons):
             st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
-        st.markdown("<div class='section-title'>📂 إدخال وربط روابط الدروس (Google Drive)</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>📂 إدخال وربط روابط الدروس وتحويل الـ PDF إلى كود لاتيك سحابياً</div>", unsafe_allow_html=True)
         
         selected_level = st.selectbox("1️⃣ اختر المستوى الدراسي:", ["جذع مشترك علوم", "أولى باكالوريا علوم (1 باك SEF)"])
         lesson_list_options = [f"الدرس {i}" for i in range(1, 13)]
         selected_lesson_num = st.selectbox("2️⃣ اختر الدرس المستهدف:", lesson_list_options)
         
-        current_note, current_pdf_link = get_lesson_ref_and_pdf(selected_level, selected_lesson_num, df_lessons)
+        current_note, current_pdf_link, current_latex = get_lesson_ref_and_pdf(selected_level, selected_lesson_num, df_lessons)
         
-        st.info(f"📋 حالة الدرس في السجل الحالي:\n- المستوى: {selected_level}\n- الدرس: {selected_lesson_num}\n- الرابط الحالي: {current_pdf_link if current_pdf_link else 'لا يوجد رابط مدخل بعد'}")
+        st.info(f"📋 حالة الدرس في السجل الحالي:\n- المستوى: {selected_level}\n- الدرس: {selected_lesson_num}\n- الرابط الحالي: {current_pdf_link if current_pdf_link else 'لا يوجد رابط مدخل بعد'}\n- كود اللاتيك المخزن: {'متوفر وصاهز ✅' if current_latex else 'غير متوفر بعد'}")
         
         input_drive_link = st.text_input("3️⃣ أدخل رابط ملف الـ PDF من Google Drive هنا:", value=current_pdf_link).strip()
         ref_note = st.text_area("أدخل ملاحظات أو توجيهات إضافية للذكاء الاصطناعي (اختياري):", height=100, value=current_note).strip()
 
-        if st.button("💾 حفظ وتحديث السجل في Google Sheets", use_container_width=True):
+        if st.button("💾 استخراج كود اللاتيك من PDF وحفظ السجل في Google Sheets", use_container_width=True):
             if not input_drive_link:
                 st.warning("⚠️ يرجى إدخال رابط صالح من Google Drive أولاً.")
             else:
-                with st.spinner("جاري تحديث جدول Lessons في Google Sheets..."):
+                with st.spinner("🔄 جاري استخراج النص من ملف الـ PDF وتحويله إلى كود لاتيك احترافي بواسطة الذكاء الاصطناعي..."):
                     try:
+                        # 1. استخراج النص الخام من ملف الـ PDF عبر الد్రايف
+                        raw_pdf_text = extract_text_from_drive_pdf(input_drive_link)
+                        
+                        # 2. توليد وتحويل النص إلى كود لاتيك (LaTeX) منظم باستخدام الذكاء الاصطناعي لتخزينه في غوغل شيت
+                        latex_prompt = f"""
+                        أنت خبير رياضيات ومنظّم محتوى بصيغة LaTeX. 
+                        قم بتحويل محتوى هذا الدرس المستخرج من ملف الـ PDF إلى كود LaTeX منظم ودقيق جداً (يتضمن العناوين، التعريفات، الخاصيات، والتمارين إن وجدت):
+                        \"\"\"{raw_pdf_text[:15000]}\"\"\"
+                        اعطني كود اللاتيك مباشرةً وبشكل منظم.
+                        """
+                        generated_latex_code = generate_content_with_fallback([latex_prompt])
+
+                        # 3. حفظ المعطيات في Google Sheets (جدول Lessons)
                         client = get_gspread_client()
                         sh = client.open("les classes")
                         ws_lessons = sh.worksheet("Lessons")
                         all_vals = ws_lessons.get_all_values()
-                        headers = all_vals[0] if all_vals else ["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "تاريخ_التحديث"]
+                        headers = all_vals[0] if all_vals else ["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "كود_لاتيك_المرجع", "تاريخ_التحديث"]
                         rows = all_vals[1:] if all_vals else []
                         
                         updated = False
                         for row in rows:
                             if len(row) >= 2 and row[0].strip() == selected_level.strip() and row[1].strip() == selected_lesson_num.strip():
+                                # التأكد من طول الصف لتحديث كود اللاتيك
+                                while len(row) < 6:
+                                    row.append("")
                                 row[2] = ref_note
                                 row[3] = input_drive_link
-                                row[4] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                                row[4] = generated_latex_code
+                                row[5] = datetime.now().strftime("%Y-%m-%d %H:%M")
                                 updated = True
                                 break
                         if not updated: 
-                            rows.append([selected_level, selected_lesson_num, ref_note, input_drive_link, datetime.now().strftime("%Y-%m-%d %H:%M")])
+                            rows.append([selected_level, selected_lesson_num, ref_note, input_drive_link, generated_latex_code, datetime.now().strftime("%Y-%m-%d %H:%M")])
                         
                         ws_lessons.clear()
                         ws_lessons.update([headers] + rows)
                         st.cache_data.clear()
-                        st.success(f"🎉 تم بنجاح حفظ الرابط والملاحظات في Google Sheets لـ ({selected_lesson_num} - {selected_level})!")
+                        st.success(f"🎉 تم بنجاح استخراج كود اللاتيك وحفظه سحابياً في Google Sheets لـ ({selected_lesson_num} - {selected_level})!")
                     except Exception as ex:
-                        st.error(f"خطأ أثناء التحديث السحابي: {ex}")
+                        st.error(f"خطأ أثناء استخراج اللاتيك أو التحديث السحابي: {ex}")
                     st.rerun()
 
     with tab3:
@@ -455,7 +473,7 @@ def admin_space(df_students, df_reports, df_lessons):
 
     with tab4:
         st.markdown("<div class='section-title'>⚙️ إعدادات الصيانة والأمان</div>", unsafe_allow_html=True)
-        st.info("تم ضبط النظام بحيث يدخل الأستاذ روابط Google Drive يدوياً وتتخزن مباشرة في Google Sheets مع دعم تدوير المفاتيح وتغيير النماذج تلقائياً.")
+        st.info("تم تفعيل نظام تخزين وترجمة كود اللاتيك (LaTeX Cache) مباشرة داخل Google Sheets لتسريع عملية الفحص الفوري للدفاتر.")
 
 # --- واجهة التلميذ ---
 def student_space(df_students, df_reports, df_lessons):
@@ -565,12 +583,14 @@ def student_space(df_students, df_reports, df_lessons):
                 
                 else:
                     st.markdown(f"#### 📸 centre de dépôt des cahiers - {l_name} ({student_level})")
-                    saved_note, saved_pdf_link = get_lesson_ref_and_pdf(student_level, l_name, df_lessons)
+                    saved_note, saved_pdf_link, saved_latex = get_lesson_ref_and_pdf(student_level, l_name, df_lessons)
                     
-                    if saved_pdf_link:
-                        st.success(f"🔗 تم رصد رابط ملف الـ PDF المرجعي الخاص بهذا الدرس، وسيقوم الذكاء الاصطناعي باستخراج نصه وتحليله مقارنة بدفرتك.")
+                    if saved_latex:
+                        st.success(f"⚡ تم رصد كود اللاتيك المرجعي لهذا الدرس مخزناً في Google Sheets، سيتم التحليل والمقارنة الفورية بدفتركت دون الحاجة لقراءة ملف الـ PDF!")
+                    elif saved_pdf_link:
+                        st.info(f"🔗 يتوفر رابط PDF ولكن لم يتم توليد كود اللاتيك بعد. سيتم اعتماده مباشرة.")
                     else:
-                        st.warning("⚠️ تنبيه: لم يقم الأستاذ بإدخال رابط PDF لهذا الدرس بعد، سيتم التدقيق بناءً على الملاحظات المكتوبة فقط.")
+                        st.warning("⚠️ تنبيه: لم يقم الأستاذ بإدخال محتوى مرجعي لهذا الدرس بعد.")
 
                     up_files = st.file_uploader(
                         f"اختر صور صفحات الدفتر لـ {l_name} (🚨 تنبيه: يشترط تحميل 8 صور على الأقل)", 
@@ -579,12 +599,12 @@ def student_space(df_students, df_reports, df_lessons):
                         type=['jpg','jpeg','png']
                     )
                     
-                    if st.button(f"بدء المعالجة والتدقيق الفوري وتحليل PDF لـ {l_name}", key=f"btn_{student_level}_{l_name}"):
+                    if st.button(f"بدء المعالجة والتدقيق الفوري وتحليل اللاتيك لـ {l_name}", key=f"btn_{student_level}_{l_name}"):
                         if up_files:
                             if len(up_files) < 8:
                                 st.error(f"⚠️ **خطأ في معايير قبول الدفتر:** لقد قمت برفع ({len(up_files)}) صور فقط! ميثاق المادة يشترط رفع **8 صور على الأقل** للدرس.")
                             else:
-                                with st.spinner("🔄 جاري استخراج نص الـ PDF وقراءة صور الدفتر بدقة وسرعة..."):
+                                with st.spinner("🔄 جاري قراءة صور الدفتر ومقارنتها مباشرة مع مرجع اللاتيك المخزن في Google Sheets..."):
                                     current_hashes = []
                                     optimized_images = []
                                     
@@ -595,9 +615,8 @@ def student_space(df_students, df_reports, df_lessons):
                                         optimized_img = optimize_image_for_api(f)
                                         optimized_images.append(optimized_img)
                                     
-                                    pdf_reference_text = ""
-                                    if saved_pdf_link:
-                                        pdf_reference_text = extract_text_from_drive_pdf(saved_pdf_link)
+                                    # قراءة المحتوى المرجعي مباشرة من غوغل شيت (كود اللاتيك أو النص الملاحظات) دون الذهاب لملف الـ PDF نهائياً لتجنب Deadline Exceeded
+                                    reference_content_for_ai = saved_latex if saved_latex else saved_note
 
                                     try:
                                         client = get_gspread_client()
@@ -640,7 +659,7 @@ def student_space(df_students, df_reports, df_lessons):
                                         f"لا يمكن لتلميذين إرسال نفس صور الدفتر!"
                                     )
                                 else:
-                                    with st.spinner("🔄 جاري مقارنة نصوص الدفتر مع محتوى الـ PDF واستخراج التقارير..."):
+                                    with st.spinner("🔄 جاري مطابقة صور الدفتر مع مرجع اللاتيك واستخراج التقارير بدقة فائقة..."):
                                         try:
                                             past_records_context = ""
                                             if not df_live_reports.empty and 'الدرس' in df_live_reports.columns and 'بصمة_الخط' in df_live_reports.columns:
@@ -653,30 +672,26 @@ def student_space(df_students, df_reports, df_lessons):
                                             أنت مساعد أستاذ الرياضيات عبد الباسط منصوري بالثانوية التأهيلية المغربية. 
                                             التلميذ {student_name} (المستوى: {student_level}، القسم: {st.session_state.user['class']}) أرسل صور دفتره لدرس ({l_name}).
                                             
-                                            المحتوى النصي المستخرج من ملف الـ PDF المرجعي للأستاذ:
-                                            \"\"\"{pdf_reference_text[:15000]}\"\"\"
+                                            المرجع الأساسي للدرس (كود اللاتيك والملاحظات المستخرجة والمخزنة في السجل):
+                                            \"\"\"{reference_content_for_ai[:15000] if reference_content_for_ai else "لا يوجد مرجع مكتوب، اعتمد المعيار العام للمادة."}\"\"\"
 
-                                            الملاحظات الإضافية المحددة من الأستاذ:
-                                            \"\"\"{saved_note}\"\"\"
-                                            
                                             أرشيف بصمات الخطوط للتلاميذ الآخرين:
                                             \"\"\"{past_records_context}\"\"\"
                                   
                                             التعليمات الصارمة:
-                                            1. قارن بدقة بين صور دفتر التلميذ والمحتوى النصي للدرس المرجعي أعلاه لاستخراج نسبة المطابقة وإنجاز الفقرات والتمارين والعناوين.
+                                            1. قارن بدقة بين صور دفتر التلميذ ومرجع اللاتيك أعلاه لاستخراج نسبة المطابقة وإنجاز الفقرات والتمارين والعناوين.
                                             2. استخرج "بصمة بصرية فريدة للخط والكتابة" في سطرين.
                                             3. إذا كان هناك تطابق تام مع دفتر تلميذ آخر (غش)، امنحه نسبة:
                                                النسبة النهائية: 0%
-                                            4. إذا كان السجل سليماً، اكتب تقريراً مفصلاً للمقارنة بين محتوى الدرس ودفتر التلميذ، واختم بالسطر الحتمي:
+                                            4. إذا كان السجل سليماً، اكتب تقريراً مفصلاً للمقارنة، واختم بالسطر الحتمي:
                                                النسبة النهائية: X%
                                                
                                             بصمة الخط المستخرجة حالياً: [ضع هنا الوصف البصري الفريد للخط]
                                             """
                                             
-                                            # تجميع الطلب مع الصور
                                             content_payload = [prompt_instructions] + optimized_images
                                             
-                                            # استدعاء الدالة الذكية الجديدة للتدوير بين المفاتيح والنماذج تلقائياً
+                                            # استدعاء دالة التدوير الآمن مع مهلة 300 ثانية
                                             report_text = generate_content_with_fallback(content_payload)
                                                 
                                             calculated_percentage = "100%"
