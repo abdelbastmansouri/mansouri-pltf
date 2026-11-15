@@ -104,10 +104,55 @@ def get_custom_bg():
 
 st.markdown(get_custom_bg(), unsafe_allow_html=True)
 
+# دالة التدوير التلقائي للمفاتيح والنماذج لتجاوز نفاد الرصيد (Quota & Rate Limits)
+def generate_content_with_fallback(content_payload):
+    keys = []
+    try:
+        keys = st.secrets["api_keys"]
+    except:
+        for i in range(1, 5):
+            k = st.secrets.get(f"GEMINI_API_KEY_{i}")
+            if k: keys.append(k)
+            
+    if not keys:
+        if "GEMINI_API_KEY" in st.secrets:
+            keys = [st.secrets["GEMINI_API_KEY"]]
+        else:
+            raise Exception("⚠️ لم يتم العثور على أي مفتاح API في ملف الـ Secrets!")
+
+    models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+    last_error = None
+
+    for model_name in models_to_try:
+        for key_idx, api_key in enumerate(keys):
+            try:
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel(model_name)
+                
+                response = model.generate_content(
+                    content_payload,
+                    request_options={"timeout": 120}
+                )
+                if response and response.text:
+                    return response.text
+            except Exception as e:
+                err_str = str(e)
+                last_error = e
+                if any(err_code in err_str for err_code in ["429", "504", "ResourceExhausted", "QuotaExceeded"]):
+                    continue
+                else:
+                    continue
+                    
+    raise Exception(f"❌ تعذرت المعالجة حتى بعد تدوير المفاتيح والنماذج. الخطأ الأخير: {last_error}")
+
 try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    # تهيئة أولية افتراضية للمفتاح الأول إن وجد
+    if "api_keys" in st.secrets and len(st.secrets["api_keys"]) > 0:
+        genai.configure(api_key=st.secrets["api_keys"][0])
+    elif "GEMINI_API_KEY" in st.secrets:
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 except Exception as e:
-    st.error("⚠️ لم يتم العثور على مفتاح 'GEMINI_API_KEY'.")
+    st.error("⚠️ لم يتم العثور على مفاتيح 'GEMINI_API_KEY' بالشكل المطلوب في الأسرار.")
 
 if 'auth' not in st.session_state: st.session_state.auth = False
 if 'user' not in st.session_state: st.session_state.user = {}
@@ -296,22 +341,15 @@ def admin_space(df_students, df_reports, df_lessons):
     with tab2:
         st.markdown("<div class='section-title'>📂 إدخال وربط روابط الدروس (Google Drive)</div>", unsafe_allow_html=True)
         
-        # 1. اختيار المستوى الدراسي أولاً
         selected_level = st.selectbox("1️⃣ اختر المستوى الدراسي:", ["جذع مشترك علوم", "أولى باكالوريا علوم (1 باك SEF)"])
-        
-        # 2. تنبثق خانة لاختيار الدرس (الدرس 1 إلى الدرس 12)
         lesson_list_options = [f"الدرس {i}" for i in range(1, 13)]
         selected_lesson_num = st.selectbox("2️⃣ اختر الدرس المستهدف:", lesson_list_options)
         
-        # جلب المعطيات الحالية للدرس المختارة إن وجدت
         current_note, current_pdf_link = get_lesson_ref_and_pdf(selected_level, selected_lesson_num, df_lessons)
         
         st.info(f"📋 حالة الدرس في السجل الحالي:\n- المستوى: {selected_level}\n- الدرس: {selected_lesson_num}\n- الرابط الحالي: {current_pdf_link if current_pdf_link else 'لا يوجد رابط مدخل بعد'}")
         
-        # 3. خانة إدخال الرابط مباشرة
         input_drive_link = st.text_input("3️⃣ أدخل رابط ملف الـ PDF من Google Drive هنا:", value=current_pdf_link).strip()
-        
-        # 4. ملاحظات إضافية للذكاء الاصطناعي
         ref_note = st.text_area("أدخل ملاحظات أو توجيهات إضافية للذكاء الاصطناعي (اختياري):", height=100, value=current_note).strip()
 
         if st.button("💾 حفظ وتحديث السجل في Google Sheets", use_container_width=True):
@@ -417,7 +455,7 @@ def admin_space(df_students, df_reports, df_lessons):
 
     with tab4:
         st.markdown("<div class='section-title'>⚙️ إعدادات الصيانة والأمان</div>", unsafe_allow_html=True)
-        st.info("تم ضبط النظام بحيث يدخل الأستاذ روابط Google Drive يدوياً وتتخزن مباشرة في Google Sheets.")
+        st.info("تم ضبط النظام بحيث يدخل الأستاذ روابط Google Drive يدوياً وتتخزن مباشرة في Google Sheets مع دعم تدوير المفاتيح وتغيير النماذج تلقائياً.")
 
 # --- واجهة التلميذ ---
 def student_space(df_students, df_reports, df_lessons):
@@ -557,7 +595,6 @@ def student_space(df_students, df_reports, df_lessons):
                                         optimized_img = optimize_image_for_api(f)
                                         optimized_images.append(optimized_img)
                                     
-                                    # استخراج النص من رابط Google Drive للـ PDF بسرعة فائقة
                                     pdf_reference_text = ""
                                     if saved_pdf_link:
                                         pdf_reference_text = extract_text_from_drive_pdf(saved_pdf_link)
@@ -636,31 +673,11 @@ def student_space(df_students, df_reports, df_lessons):
                                             بصمة الخط المستخرجة حالياً: [ضع هنا الوصف البصري الفريد للخط]
                                             """
                                             
-                                            model = genai.GenerativeModel("gemini-2.5-flash")
+                                            # تجميع الطلب مع الصور
                                             content_payload = [prompt_instructions] + optimized_images
                                             
-                                            response_success = False
-                                            report_text = ""
-                                            
-                                            for retry_attempt in range(3):
-                                                try:
-                                                    res = model.generate_content(
-                                                        content_payload,
-                                                        request_options={"timeout": 120}
-                                                    )
-                                                    report_text = res.text
-                                                    response_success = True
-                                                    break
-                                                except Exception as api_err:
-                                                    if any(err_code in str(api_err) for err_code in ["429", "504", "ResourceExhausted", "DeadlineExceeded"]):
-                                                        st.warning(f"⚠️ الخادم مشغول، جاري إعادة المحاولة ({retry_attempt + 1}/3)...")
-                                                        time.sleep(10)
-                                                    else:
-                                                        raise api_err
-                                            
-                                            if not response_success:
-                                                st.error("🚨 خادم الفحص السحابي ممتلئ أو استغرق وقتاً طويلاً. يرجى المحاولة بعد قليل.")
-                                                st.stop()
+                                            # استدعاء الدالة الذكية الجديدة للتدوير بين المفاتيح والنماذج تلقائياً
+                                            report_text = generate_content_with_fallback(content_payload)
                                                 
                                             calculated_percentage = "100%"
                                             match_pct = re.search(r"النسبة\s+النهائية:\s*(\d+%)", report_text)
