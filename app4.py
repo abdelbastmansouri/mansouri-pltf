@@ -188,18 +188,18 @@ def optimize_image_for_api(uploaded_file):
     except:
         return Image.open(uploaded_file)
 
-# دالة محصّنة لاستخراج النسبة المئوية بدقة مهما كان تنسيق الذكاء الاصطناعي (عريض، مسافات، إلخ)
+# دالة محصّنة لاستخراج النسبة المئوية كاملة (بما في ذلك الأعداد العشرية مثل 98.78%)
 def extract_percentage_from_report(report_str):
     text = str(report_str)
-    # 1. البحث عن "النسبة النهائية" مع السماح بوجود نجمات ** أو مسافات قبل/بعد النقطتين وعلامة %
-    match_pct = re.search(r"النسبة\s+النهائية[\s\*]*:[\s\*]*(\d+)\s*%", text)
+    match_pct = re.search(r"النسبة\s+النهائية[\s\*]*:[\s\*]*(\d+(?:[\.,]\d+)?)\s*%", text)
     if match_pct:
-        return f"{match_pct.group(1)}%"
+        clean_num = match_pct.group(1).replace(",", ".")
+        return f"{clean_num}%"
     
-    # 2. خطة بديلة: أخذ آخر نسبة مئوية مذكورة في التقرير إذا لم يلتزم النموذج بالصيغة الحرفية
-    all_pcts = re.findall(r"(\d+)\s*%", text)
+    all_pcts = re.findall(r"(\d+(?:[\.,]\d+)?)\s*%", text)
     if all_pcts:
-        return f"{all_pcts[-1]}%"
+        clean_num = all_pcts[-1].replace(",", ".")
+        return f"{clean_num}%"
         
     return "0%"
 
@@ -446,7 +446,7 @@ def admin_space(df_students, df_reports, df_lessons):
 
     with tab4:
         st.markdown("<div class='section-title'>⚙️ إعدادات الصيانة والأمان</div>", unsafe_allow_html=True)
-        st.info("تم ضبط النظام للتدقيق النسبي الدقيق وتوحيد النسبة المستخرجة بين التقرير والشريط العلوي وجدول Google Sheets.")
+        st.info("تم ضبط النظام للتدقيق النسبي الدقيق وتوحيد النسبة المستخرجة (بما في ذلك الأعداد العشرية) بين التقرير والشريط العلوي وجدول Google Sheets.")
 
 # --- واجهة التلميذ ---
 def student_space(df_students, df_reports, df_lessons):
@@ -526,12 +526,14 @@ def student_space(df_students, df_reports, df_lessons):
                 l_clean = str(row['الدرس_نظيف'])
                 rep_content = str(row.get('التقرير', ''))
                 lesson_full_reports[l_clean] = rep_content
-                col_h_val = str(row.get('بصمة_الخط', '')).strip()
-                # إذا كانت القيمة المخزنة في العمود H صالحة وأكبر من 0% نعتمدها، وإلا نستخرجها مباشرة من نص التقرير
-                if "%" in col_h_val and col_h_val != "0%":
-                    lesson_percentages[l_clean] = col_h_val
+                
+                # استخراج النسبة الكاملة مباشرة من نص التقرير لضمان عدم ضياع الجزء الصحيح قبل الفاصلة
+                extracted_from_rep = extract_percentage_from_report(rep_content)
+                if extracted_from_rep != "0%":
+                    lesson_percentages[l_clean] = extracted_from_rep
                 else:
-                    lesson_percentages[l_clean] = extract_percentage_from_report(rep_content)
+                    col_h_val = str(row.get('بصمة_الخط', '')).strip()
+                    lesson_percentages[l_clean] = col_h_val if "%" in col_h_val else "0%"
         
         st.markdown("<div class='section-title'>📊 وضعيتك الحالية في السجل الرقمي:</div>", unsafe_allow_html=True)
         
@@ -694,8 +696,8 @@ def student_space(df_students, df_reports, df_lessons):
                                             4. **هيكلة التقرير الواضحة للتلميذ(ة):**
                                                - **أولاً: الفقرات والتمارين المدونة بشكل سليم** (مع ذكر وزنها التقريبي).
                                                - **ثانياً: الفقرات والتمارين غير المكتوبة أو الناقصة** (تحديد كل فقرة أو سؤال لم يُكتب في الدفتر وسبب الخصم من النسبة).
-                                            5. اختم التقرير في آخر سطر حصرياً بدون أي نجمات أو تنسيق عريض بالصيغة الحرفية التالية:
-                                               percentage= X%
+                                            5. اختم التقرير في آخر سطر حصرياً بدون أي نجمات أو تنسيق عريض بالصيغة الحرفية التالية (رقم صحيح فقط متبوع بـ %):
+                                               النسبة النهائية: X%
                                             """
                                             
                                             model = genai.GenerativeModel("gemini-2.5-flash")
