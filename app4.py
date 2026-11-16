@@ -120,7 +120,6 @@ def get_gcp_credentials():
 def get_gspread_client():
     return gspread.authorize(get_gcp_credentials())
 
-# دالة ذكية لتحديد المستوى الدراسي تلقائياً من اسم القسم
 def detect_level_from_class(class_name, explicit_level=""):
     c_up = str(class_name).strip().upper()
     exp = str(explicit_level).strip()
@@ -170,7 +169,6 @@ def extract_text_from_drive_pdf(drive_link):
 def calculate_image_hash(file_bytes):
     return hashlib.md5(file_bytes).hexdigest()
 
-# رفع الدقة إلى 1300px وجودة 82% لكي تظهر الأرقام الصغيرة في الهوامش بوضوح تام
 def optimize_image_for_api(uploaded_file):
     try:
         img = Image.open(uploaded_file)
@@ -189,7 +187,7 @@ def optimize_image_for_api(uploaded_file):
 
 def extract_percentage_from_report(report_str):
     match_pct = re.search(r"النسبة\s+النهائية:\s*(\d+%)", str(report_str))
-    return match_pct.group(1) if match_pct else "100%"
+    return match_pct.group(1) if match_pct else "0%"
 
 def normalize_reports_df(df):
     df.columns = df.columns.str.strip()
@@ -434,7 +432,7 @@ def admin_space(df_students, df_reports, df_lessons):
 
     with tab4:
         st.markdown("<div class='section-title'>⚙️ إعدادات الصيانة والأمان</div>", unsafe_allow_html=True)
-        st.info("تم ضبط النظام ليتطابق مع الأعمدة الثمانية في ورقة Reports على Google Sheets ويستنتج المستوى تلقائياً من اسم القسم.")
+        st.info("تم ضبط النظام للتدقيق النسبي الدقيق في تدوين فقرات الدرس واحتساب النسبة المئوية حسب الفقرات المنقولة من السبورة.")
 
 # --- واجهة التلميذ ---
 def student_space(df_students, df_reports, df_lessons):
@@ -476,7 +474,6 @@ def student_space(df_students, df_reports, df_lessons):
                 if not matched_student.empty:
                     row_std = matched_student.iloc[0]
                     raw_level = str(row_std.get('المستوى', '')).strip() if 'المستوى' in row_std else ""
-                    # استنتاج المستوى تلقائياً من اسم القسم (1BACSEF -> أولى باكالوريا علوم)
                     student_level_val = detect_level_from_class(sel_class, raw_level)
                     student_serial_val = str(row_std.get(col_serial, 'غير محدد')).strip() if col_serial in row_std else 'غير محدد'
                     
@@ -496,7 +493,6 @@ def student_space(df_students, df_reports, df_lessons):
         student_name = st.session_state.user['name']
         student_massar = st.session_state.user.get('massar', '')
         student_serial = st.session_state.user.get('serial', 'غير محدد')
-        # إعادة التأكد من المستوى بناءً على القسم حتى لو كانت الجلسة مفتوحة
         student_level = detect_level_from_class(st.session_state.user['class'], st.session_state.user.get('level', ''))
         
         st.success(f"🏫 التلميذ(ة): **{student_name}** | الرقم التسلسلي: **{student_serial}** | مسار: **{student_massar}** | المستوى: **{student_level}** | القسم: **{st.session_state.user['class']}**")
@@ -532,9 +528,9 @@ def student_space(df_students, df_reports, df_lessons):
                 if l_sub in submitted_lessons:
                     pct = lesson_percentages.get(l_sub, "N/A")
                     if pct == "0%":
-                        status_text += f"🚨 تم تدقيق <b>{l_sub}</b> وتم رصد <b>مخالفة/تكرار</b> (النسبة: <span style='color:white; background:red; padding:2px 6px; border-radius:4px;'><b>0%</b></span>)<br>"
+                        status_text += f"🚨 تم تدقيق <b>{l_sub}</b> وتم رصد <b>مخالفة/عدم تطابق الهوية</b> (النسبة: <span style='color:white; background:red; padding:2px 6px; border-radius:4px;'><b>0%</b></span>)<br>"
                     else:
-                        status_text += f"📉 نسبة إنجازك لـ <b>{l_sub}</b> هي: <span style='color:#e0f2fe; background:#1e3a8a; padding:2px 8px; border-radius:5px;'><b>{pct}</b></span><br>"
+                        status_text += f"📉 نسبة تدوينك وإنجازك لـ <b>{l_sub}</b> هي: <span style='color:#e0f2fe; background:#1e3a8a; padding:2px 8px; border-radius:5px;'><b>{pct}</b></span><br>"
             st.markdown(f"<div class='status-box'>{status_text}</div>", unsafe_allow_html=True)
         else:
             st.warning("لم تقم بإرسال أي دروس بعد. المرجو اختيار الدرس من التبويبات أسفله ورفع 8 صور على الأقل.")
@@ -549,15 +545,15 @@ def student_space(df_students, df_reports, df_lessons):
                     current_p = lesson_percentages.get(l_name, "N/A")
                     if current_p == "0%":
                         st.error(f"🚨 **تنبيه نظام التدقيق والنزاهة الرقمية:**")
-                        st.markdown(f"<div style='background-color:#fee2e2; border-right:6px solid #dc2626; padding:15px; border-radius:8px; color:#991b1b; font-weight:bold;'>⚠️ تم رفض هذا الإرسال وحصلت على نسبة 0% بسبب عدم تطابق الرقم التسلسلي في الهوامش أو رصد تكرار صور من زميل آخر.</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='background-color:#fee2e2; border-right:6px solid #dc2626; padding:15px; border-radius:8px; color:#991b1b; font-weight:bold;'>⚠️ تم رفض هذا الإرسال وحصلت على نسبة 0% بسبب عدم مطابقة الهوية أو إرسال محتوى لا يخص الدرس.</div>", unsafe_allow_html=True)
                         st.markdown(f"### 📋 تفاصيل تقرير المخالفة المحفوظ إدارياً:")
                         st.info(lesson_full_reports.get(l_name, "لا يوجد نص تقرير محفوظ."))
                     else:
-                        st.warning(f"🔒 **هذا الدرس مقفول:** لقد قمت بإرسال صور {l_name} مسبقاً بنجاح وتم تسجيل تقريرك (النسبة: {current_p}).")
-                        with st.expander(f"📄 اضغط هنا لعرض تقرير التصحيح المفصل الخاص بـ {l_name}", expanded=True):
+                        st.warning(f"🔒 **هذا الدرس مقفول:** لقد قمت بإرسال صور {l_name} مسبقاً وتم احتساب نسبة التدوين (**{current_p}**).")
+                        with st.expander(f"📄 اضغط هنا لعرض تقرير تدقيق التدوين المفصل لـ {l_name}", expanded=True):
                             st.markdown(f"""
                             <div style='background-color: #f8fafc; padding: 20px; border-radius: 10px; border: 1px solid #cbd5e1; color: #1e293b;'>
-                                <h4>📊 نتيجة التدقيق: <b>{current_p}</b></h4>
+                                <h4>📊 نسبة تدوين الدرس المحققة: <b>{current_p}</b></h4>
                                 <hr>
                                 <p style='white-space: pre-wrap; line-height: 1.6;'>{lesson_full_reports.get(l_name, "لا يوجد نص تقرير محفوظ.")}</p>
                             </div>
@@ -568,23 +564,23 @@ def student_space(df_students, df_reports, df_lessons):
                     saved_note, saved_pdf_link = get_lesson_ref_and_pdf(student_level, l_name, df_lessons)
                     
                     if saved_pdf_link:
-                        st.success(f"🔗 تم رصد رابط ملف الـ PDF المرجعي الخاص بهذا الدرس ({student_level})، وسيقوم الذكاء الاصطناعي باستخراج نصه وتحليله مقارنة بدفرتك.")
+                        st.success(f"🔗 تم رصد ملف الدرس المرجعي للأستاذ ({student_level})؛ سيتم تدقيق نقل جميع الفقرات والأمثلة والتمارين واحتساب النسبة المئوية بناءً على ما هو مكتوب في دفترك.")
                     else:
                         st.warning(f"⚠️ تنبيه: لم يقم الأستاذ بإدخال رابط PDF لهذا الدرس ({student_level}) بعد، سيتم التدقيق بناءً على المقرر الرسمي المغربي.")
 
                     up_files = st.file_uploader(
-                        f"اختر صور صفحات الدفتر لـ {l_name} (🚨 تنبيه: يشترط تحميل 8 صور على الأقل مع كتابة رقمك التسلسلي '{student_serial}' في هوامش الدفتر)", 
+                        f"اختر صور صفحات الدفتر لـ {l_name} (🚨 يشترط تحميل 8 صور على الأقل مع كتابة رقمك التسلسلي '{student_serial}' في الهوامش والتأكد من نقل جميع فقرات الدرس كاملة):", 
                         accept_multiple_files=True, 
                         key=f"up_{student_level}_{l_name}", 
                         type=['jpg','jpeg','png']
                     )
                     
-                    if st.button(f"بدء المعالجة والتدقيق الفوري وتحليل PDF لـ {l_name}", key=f"btn_{student_level}_{l_name}"):
+                    if st.button(f"بدء المعالجة وتدقيق نسبة التدوين لـ {l_name}", key=f"btn_{student_level}_{l_name}"):
                         if up_files:
                             if len(up_files) < 8:
                                 st.error(f"⚠️ **خطأ في معايير قبول الدفتر:** لقد قمت برفع ({len(up_files)}) صور فقط! ميثاق المادة يشترط رفع **8 صور على الأقل** للدرس.")
                             else:
-                                with st.spinner("🔄 جاري استخراج نص الـ PDF وقراءة صور الدفتر للتحقق من الهوية والمحتوى..."):
+                                with st.spinner("🔄 جاري جرد فقرات الدرس المرجعي ومقارنتها مع ما تم تدوينه في دفترك..."):
                                     current_hashes = []
                                     optimized_images = []
                                     
@@ -652,28 +648,38 @@ def student_space(df_students, df_reports, df_lessons):
                                         f"لا يمكن لتلميذين إرسال نفس صور الدفتر!"
                                     )
                                 else:
-                                    with st.spinner("🔄 جاري مقارنة نصوص الدفتر والتحقق من تطابق الرقم التسلسلي مع محتوى الصور واستخراج التقارير..."):
+                                    with st.spinner("🔄 جاري احتساب الوزن النسبي لكل فقرة وتحديد النسبة المئوية الدقيقة للتدوين..."):
                                         try:
                                             prompt_instructions = f"""
-                                            أنت مساعد أستاذ الرياضيات عبد الباسط منصوري بالثانوية التأهيلية المغربية. 
-                                            التلميذ(ة): {student_name}
-                                            الرقم التسلسلي الرسمي (المكون من 4 أرقام): {student_serial}
-                                            رقم مسار: {student_massar}
-                                            المستوى الدراسي الفعلي: {student_level}
-                                            القسم: {st.session_state.user['class']}
-                                            الدرس المستهدف: {l_name}
+                                            أنت مساعد أستاذ الرياضيات عبد الباسط منصوري بالثانوية التأهيلية المغربية. مهمتك هي **التدقيق الكمّي والنوعي لتدوين الدرس** في دفتر التلميذ(ة): {student_name}
+                                            - الرقم التسلسلي الرسمي: {student_serial}
+                                            - رقم مسار: {student_massar}
+                                            - المستوى الدراسي: {student_level}
+                                            - القسم: {st.session_state.user['class']}
+                                            - الدرس المستهدف: {l_name}
                                             
-                                            المحتوى النصي المستخرج من ملف الـ PDF المرجعي للأستاذ الخاص بمستوى ({student_level}):
+                                            النص المرجعي الكامل للدرس الذي كتبه الأستاذ في السبورة (مستخرج من ملف الـ PDF):
                                             \"\"\"{pdf_reference_text[:15000]}\"\"\"
 
-                                            الملاحظات الإضافية المحددة من الأستاذ:
+                                            توجيهات إضافية من الأستاذ:
                                             \"\"\"{saved_note}\"\"\"
                                   
-                                            التعليمات الصارمة والدقيقة جداً:
-                                            1. **التحقق البصري الدقيق من الرقم التسلسلي ({student_serial}):** افحص بدقة هوامش وزوايا جميع صور الدفتر المرفقة (أعلى أو أسفل أو يمين أو يسار الصفحة) لقراءة الرقم المكتوب بخط اليد. انتبه جيداً للأرقام المتجاورة حتى لا تقرأ رقماً واحداً فقط (مثلاً اقرأ {student_serial} كاملاً وليس الرقم الأول فقط).
-                                            2. إذا وجدت الرقم التسلسلي ({student_serial}) مكتوباً بوضوح في أغلب الصفحات المرفقة، فهذا يؤكد هوية التلميذ(ة). أما إذا وجدت رقماً تسلسلياً مختلفاً تماماً يعود لتلميذ آخر، أو لم تجد أي رقم تسلسلي نهائياً في الصفحات، فامنحه نسبة 0% واعتبرها حالة عدم مطابقة الهوية.
-                                            3. **المقارنة البيداغوجية:** قارن محتوى الدفتر مع درس ({l_name}) الخاص بمستوى **{student_level}** (المستخرج من الـ PDF أعلاه أو من المقرر المغربي الرسمي لهذا المستوى تحديداً).
-                                            4. اكتب تقريراً مفصلاً ومشجعاً للتلميذ(ة) يوضح مدى استيفاء الفقرات والتمارين، واختم التقرير في آخر سطر حصرياً بالصيغة التالية:
+                                            قواعد التدقيق وحساب النسبة المئوية (يجب الالتزام بها بدقة صارمة):
+                                            1. **طبيعة التقييم (تدقيق النقل والتدوين فقط):** التلميذ(ة) ينقل ما كتبه الأستاذ في السبورة، ولم يؤلف الأمثلة أو البراهين بنفسه. **يُمنع منعاً باتاً** قول ("قدمتِ مثالاً"، "أظهرتِ فهماً"، "أبدعتِ في البرهان"). استخدم فقط عبارات تدقيق التدوين: ("تم تدوين فقرة..."، "تم نقل التمرين التطبيقي وحله..."، "لم يتم تدوين فقرة..."، "نقص في نقل...").
+                                            2. **طريقة احتساب النسبة المئوية الدقيقة (من 0% إلى 100%):**
+                                               - قسّم محتوى الدرس المرجعي أعلاه إلى مجموع فقراته وعناصره الأساسية (التعاريف، الخاصيات، الأمثلة، والتمارين التطبيقية وحلولها)، واعتبر مجموع الدرس يساوي 100%.
+                                               - احسب بدقة وزن كل فقرة:
+                                                 * كل فقرة أو تمرين نُقل بالكامل وبشكل سليم يحصل على كامل نسبته.
+                                                 * كل فقرة أو تمرين نُقل ناقصاً أو به أخطاء في نسخ المعطيات/الرموز يُخصم نصف وزنه.
+                                                 * كل فقرة أو مثال أو تمرين **غير مكتوب في الدفتر** يُخصم وزنه بالكامل من المجموع!
+                                               - لا تعطِ 100% إلا إذا كان الدفتر يحتوي على جميع فقرات وتمارين المرجع دون أي نقص. وإذا كتب التلميذ 70% فقط من فقرات الدرس أعطه 70%، وإذا كتب 20% أو 40% أو 95% أعطه النسبة الفعلية المطابقة لما دوّنه في دفترك!
+                                            3. **التحقق من الرقم التسلسلي ({student_serial}):** افحص هوامش الصفحات بحثاً عن ({student_serial}).
+                                               - إذا وُجد رقم تسلسلي آخر لتلميذ آخر بوضوح، امنح 0% واذكر ذلك.
+                                               - إذا كان الرقم ({student_serial}) غير واضح في التصوير أو غير مكتوب في بعض الصفحات، لا تُلغِ نسبة التدوين المحسوبة، بل أضف في نهاية التقرير سطراً: "تنبيه إداري: الرقم التسلسلي ({student_serial}) غير واضح في بعض الهوامش، يرجى إبراز كتابته في جميع الصفحات."
+                                            4. **هيكلة التقرير الواضحة للتلميذ(ة):**
+                                               - **أولاً: الفقرات والتمارين المدونة بشكل سليم** (مع ذكر وزنها التقريبي).
+                                               - **ثانياً: الفقرات والتمارين غير المكتوبة أو الناقصة** (تحديد كل فقرة أو سؤال لم يُكتب في الدفتر وسبب الخصم من النسبة).
+                                            5. اختم التقرير في آخر سطر حصرياً بالصيغة التالية (رقم صحيح فقط متبوع بـ %):
                                                النسبة النهائية: X%
                                             """
                                             
@@ -719,9 +725,9 @@ def student_space(df_students, df_reports, df_lessons):
                                             st.cache_data.clear()
                                             
                                             if calculated_percentage == "0%":
-                                                st.error("🚨 تم رفض الملف وتسجيل نسبة 0% بسبب عدم تطابق الرقم التسلسلي في الهوامش أو رصد مخالفة!")
+                                                st.error("🚨 تم رفض الملف وتسجيل نسبة 0% بسبب عدم مطابقة الهوية أو إرسال محتوى خاطئ!")
                                             else:
-                                                st.success(f"تم تحليل المقارنة بنجاح وحفظ التقرير! نسبة الإنجاز المسجلة: {calculated_percentage} ✅")
+                                                st.success(f"تم تدقيق التدوين بنجاح! نسبة إنجازك للدرس هي: {calculated_percentage} ✅")
                                                 
                                             st.rerun() 
                                             
