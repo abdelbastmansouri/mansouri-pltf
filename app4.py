@@ -93,11 +93,14 @@ def get_custom_bg():
     }
     
     .status-box {
-        background-color: rgba(26, 54, 93, 0.05);
-        border-right: 5px solid #10b981;
-        padding: 15px;
-        border-radius: 8px;
+        background-color: #ffffff !important;
+        color: #1e293b !important;
+        border-right: 6px solid #10b981;
+        padding: 16px;
+        border-radius: 10px;
         margin-bottom: 20px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        font-size: 1.15rem;
     }
     </style>
     """
@@ -185,9 +188,20 @@ def optimize_image_for_api(uploaded_file):
     except:
         return Image.open(uploaded_file)
 
+# دالة محصّنة لاستخراج النسبة المئوية بدقة مهما كان تنسيق الذكاء الاصطناعي (عريض، مسافات، إلخ)
 def extract_percentage_from_report(report_str):
-    match_pct = re.search(r"النسبة\s+النهائية:\s*(\d+%)", str(report_str))
-    return match_pct.group(1) if match_pct else "0%"
+    text = str(report_str)
+    # 1. البحث عن "النسبة النهائية" مع السماح بوجود نجمات ** أو مسافات قبل/بعد النقطتين وعلامة %
+    match_pct = re.search(r"النسبة\s+النهائية[\s\*]*:[\s\*]*(\d+)\s*%", text)
+    if match_pct:
+        return f"{match_pct.group(1)}%"
+    
+    # 2. خطة بديلة: أخذ آخر نسبة مئوية مذكورة في التقرير إذا لم يلتزم النموذج بالصيغة الحرفية
+    all_pcts = re.findall(r"(\d+)\s*%", text)
+    if all_pcts:
+        return f"{all_pcts[-1]}%"
+        
+    return "0%"
 
 def normalize_reports_df(df):
     df.columns = df.columns.str.strip()
@@ -432,7 +446,7 @@ def admin_space(df_students, df_reports, df_lessons):
 
     with tab4:
         st.markdown("<div class='section-title'>⚙️ إعدادات الصيانة والأمان</div>", unsafe_allow_html=True)
-        st.info("تم ضبط النظام للتدقيق النسبي الدقيق في تدوين فقرات الدرس واحتساب النسبة المئوية حسب الفقرات المنقولة من السبورة.")
+        st.info("تم ضبط النظام للتدقيق النسبي الدقيق وتوحيد النسبة المستخرجة بين التقرير والشريط العلوي وجدول Google Sheets.")
 
 # --- واجهة التلميذ ---
 def student_space(df_students, df_reports, df_lessons):
@@ -513,7 +527,8 @@ def student_space(df_students, df_reports, df_lessons):
                 rep_content = str(row.get('التقرير', ''))
                 lesson_full_reports[l_clean] = rep_content
                 col_h_val = str(row.get('بصمة_الخط', '')).strip()
-                if "%" in col_h_val:
+                # إذا كانت القيمة المخزنة في العمود H صالحة وأكبر من 0% نعتمدها، وإلا نستخرجها مباشرة من نص التقرير
+                if "%" in col_h_val and col_h_val != "0%":
                     lesson_percentages[l_clean] = col_h_val
                 else:
                     lesson_percentages[l_clean] = extract_percentage_from_report(rep_content)
@@ -523,14 +538,14 @@ def student_space(df_students, df_reports, df_lessons):
         lesson_names_12 = [f"الدرس {i}" for i in range(1, 13)]
         
         if len(submitted_lessons) > 0:
-            status_text = "📢 <b>حالة إرسال الفروض والدفاتر:</b><br>"
+            status_text = "📢 <b>حالة إرسال الدفاتر والتدقيق:</b><br>"
             for l_sub in lesson_names_12:
                 if l_sub in submitted_lessons:
-                    pct = lesson_percentages.get(l_sub, "N/A")
+                    pct = lesson_percentages.get(l_sub, "0%")
                     if pct == "0%":
-                        status_text += f"🚨 تم تدقيق <b>{l_sub}</b> وتم رصد <b>مخالفة/عدم تطابق الهوية</b> (النسبة: <span style='color:white; background:red; padding:2px 6px; border-radius:4px;'><b>0%</b></span>)<br>"
+                        status_text += f"🚨 تم تدقيق <b>{l_sub}</b> وتم رصد <b>مخالفة/عدم تطابق الهوية</b> (النسبة: <span style='color:white; background:#dc2626; padding:2px 8px; border-radius:4px;'><b>0%</b></span>)<br>"
                     else:
-                        status_text += f"📉 نسبة تدوينك وإنجازك لـ <b>{l_sub}</b> هي: <span style='color:#e0f2fe; background:#1e3a8a; padding:2px 8px; border-radius:5px;'><b>{pct}</b></span><br>"
+                        status_text += f"✅ نسبة تدوينك وإنجازك لـ <b>{l_sub}</b> هي: <span style='color:#ffffff; background:#1e3a8a; padding:2px 10px; border-radius:5px;'><b>{pct}</b></span><br>"
             st.markdown(f"<div class='status-box'>{status_text}</div>", unsafe_allow_html=True)
         else:
             st.warning("لم تقم بإرسال أي دروس بعد. المرجو اختيار الدرس من التبويبات أسفله ورفع 8 صور على الأقل.")
@@ -542,14 +557,14 @@ def student_space(df_students, df_reports, df_lessons):
                 l_name = f"الدرس {i+1}"
                 
                 if l_name in submitted_lessons:
-                    current_p = lesson_percentages.get(l_name, "N/A")
+                    current_p = lesson_percentages.get(l_name, "0%")
                     if current_p == "0%":
                         st.error(f"🚨 **تنبيه نظام التدقيق والنزاهة الرقمية:**")
                         st.markdown(f"<div style='background-color:#fee2e2; border-right:6px solid #dc2626; padding:15px; border-radius:8px; color:#991b1b; font-weight:bold;'>⚠️ تم رفض هذا الإرسال وحصلت على نسبة 0% بسبب عدم مطابقة الهوية أو إرسال محتوى لا يخص الدرس.</div>", unsafe_allow_html=True)
                         st.markdown(f"### 📋 تفاصيل تقرير المخالفة المحفوظ إدارياً:")
                         st.info(lesson_full_reports.get(l_name, "لا يوجد نص تقرير محفوظ."))
                     else:
-                        st.warning(f"🔒 **هذا الدرس مقفول:** لقد قمت بإرسال صور {l_name} مسبقاً وتم احتساب نسبة التدوين (**{current_p}**).")
+                        st.success(f"🔒 **تم تدقيق {l_name} بنجاح:** نسبة تدوين الدرس المسجلة هي (**{current_p}**).")
                         with st.expander(f"📄 اضغط هنا لعرض تقرير تدقيق التدوين المفصل لـ {l_name}", expanded=True):
                             st.markdown(f"""
                             <div style='background-color: #f8fafc; padding: 20px; border-radius: 10px; border: 1px solid #cbd5e1; color: #1e293b;'>
@@ -679,7 +694,7 @@ def student_space(df_students, df_reports, df_lessons):
                                             4. **هيكلة التقرير الواضحة للتلميذ(ة):**
                                                - **أولاً: الفقرات والتمارين المدونة بشكل سليم** (مع ذكر وزنها التقريبي).
                                                - **ثانياً: الفقرات والتمارين غير المكتوبة أو الناقصة** (تحديد كل فقرة أو سؤال لم يُكتب في الدفتر وسبب الخصم من النسبة).
-                                            5. اختم التقرير في آخر سطر حصرياً بالصيغة التالية (رقم صحيح فقط متبوع بـ %):
+                                            5. اختم التقرير في آخر سطر حصرياً بدون أي نجمات أو تنسيق عريض بالصيغة الحرفية التالية:
                                                النسبة النهائية: X%
                                             """
                                             
