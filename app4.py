@@ -213,9 +213,9 @@ def load_data():
             df_students.columns = df_students.columns.str.strip()
             if "إسم التلميذ" in df_students.columns: df_students = df_students.rename(columns={"إسم التلميذ": "اسم التلميذ"})
         else:
-            df_students = pd.DataFrame(columns=["رقم التلميذ", "اسم التلميذ", "تاريخ الإزدياد", "القسم", "المستوى"])
+            df_students = pd.DataFrame(columns=["رقم التلميذ", "الرقم التسلسلي", "اسم التلميذ", "تاريخ الإزدياد", "القسم", "المستوى"])
     except:
-        df_students = pd.DataFrame(columns=["رقم التلميذ", "اسم التلميذ", "تاريخ الإزدياد", "القسم", "المستوى"])
+        df_students = pd.DataFrame(columns=["رقم التلميذ", "الرقم التسلسلي", "اسم التلميذ", "تاريخ الإزدياد", "القسم", "المستوى"])
 
     try:
         reports_worksheet = sh.worksheet("Reports")
@@ -271,7 +271,7 @@ with st.sidebar:
         user_display = st.session_state.user.get('name', 'المستخدم')
         st.success(f" مرحباً ب: \n\n**{user_display}**")
         if st.session_state.role == "student":
-            st.info(f"🏫 القسم: {st.session_state.user.get('class')}\n📚 المستوى: {st.session_state.user.get('level')}")
+            st.info(f"🏫 القسم: {st.session_state.user.get('class')}\n🔢 الرقم التسلسلي: {st.session_state.user.get('serial')}\n📚 المستوى: {st.session_state.user.get('level')}")
         st.divider()
         if st.button("🚪 تسجيل الخروج", use_container_width=True):
             for key in list(st.session_state.keys()): del st.session_state[key]
@@ -440,11 +440,12 @@ def student_space(df_students, df_reports, df_lessons):
     col_class = 'القسم'
     col_name = 'اسم التلميذ'
     col_id = 'رقم التلميذ'  
-    col_birth = 'تاريخ الإزدياد' 
+    col_birth = 'تاريخ الإزدياد'
+    col_serial = 'الرقم التسلسلي'
 
     if not st.session_state.auth:
         st.markdown("<div class='section-title'>🔑 تسجيل الدخول الآمن لمنظومة التدقيق</div>", unsafe_allow_html=True)
-        sel_class = st.selectbox("الرجاء تحديد قسمك الفعلي:", ["---"] + df_students[col_class].unique().tolist())
+        sel_class = st.selectbox("الرجاء تحديد قسمك الفعلي:", ["---"] + sorted(df_students[col_class].astype(str).str.strip().unique().tolist()))
         col_input1, col_input2 = st.columns(2)
         input_massar = col_input1.text_input("أدخل رقم مسار الخاص بك:").strip()
         input_birth = col_input2.text_input("أدخل تاريخ ازديادك الموثق (سنة-شهر-يوم):").strip()
@@ -453,6 +454,7 @@ def student_space(df_students, df_reports, df_lessons):
             if sel_class != "---" and input_massar and input_birth:
                 df_students[col_id] = df_students[col_id].astype(str).str.strip()
                 df_students[col_birth] = df_students[col_birth].astype(str).str.strip()
+                df_students[col_class] = df_students[col_class].astype(str).str.strip()
                 
                 matched_student = df_students[
                     (df_students[col_class] == sel_class) & 
@@ -460,12 +462,16 @@ def student_space(df_students, df_reports, df_lessons):
                     (df_students[col_birth] == input_birth)
                 ]
                 if not matched_student.empty:
-                    student_level_val = str(matched_student.iloc[0].get('المستوى', 'جذع مشترك علوم')).strip()
+                    row_std = matched_student.iloc[0]
+                    student_level_val = str(row_std.get('المستوى', 'جذع مشترك علوم')).strip()
+                    student_serial_val = str(row_std.get(col_serial, 'غير محدد')).strip() if col_serial in row_std else 'غير محدد'
+                    
                     st.session_state.auth = True
                     st.session_state.user = {
-                        "name": str(matched_student.iloc[0][col_name]).strip(), 
+                        "name": str(row_std[col_name]).strip(), 
                         "class": sel_class,
                         "massar": input_massar.strip().upper(),
+                        "serial": student_serial_val,
                         "level": student_level_val
                     }
                     st.success("🎉 تم التحقق من الهوية بنجاح!")
@@ -475,9 +481,10 @@ def student_space(df_students, df_reports, df_lessons):
     else:
         student_name = st.session_state.user['name']
         student_massar = st.session_state.user.get('massar', '')
+        student_serial = st.session_state.user.get('serial', 'غير محدد')
         student_level = st.session_state.user.get('level', 'جذع مشترك علوم')
         
-        st.success(f"🏫 التلميذ(ة): **{student_name}** | مسار: **{student_massar}** | المستوى: **{student_level}** | القسم: **{st.session_state.user['class']}**")
+        st.success(f"🏫 التلميذ(ة): **{student_name}** | الرقم التسلسلي: **{student_serial}** | مسار: **{student_massar}** | المستوى: **{student_level}** | القسم: **{st.session_state.user['class']}**")
         
         student_all_submissions = pd.DataFrame()
         if not df_reports.empty and 'رقم مسار' in df_reports.columns and 'الدرس' in df_reports.columns:
@@ -494,7 +501,6 @@ def student_space(df_students, df_reports, df_lessons):
                 l_clean = str(row['الدرس_نظيف'])
                 rep_content = str(row.get('التقرير', ''))
                 lesson_full_reports[l_clean] = rep_content
-                # استخراج النسبة إما من العمود H (بصمة_الخط) إذا كانت مسجلة فيه، أو من نص التقرير
                 col_h_val = str(row.get('بصمة_الخط', '')).strip()
                 if "%" in col_h_val:
                     lesson_percentages[l_clean] = col_h_val
@@ -528,7 +534,7 @@ def student_space(df_students, df_reports, df_lessons):
                     current_p = lesson_percentages.get(l_name, "N/A")
                     if current_p == "0%":
                         st.error(f"🚨 **تنبيه نظام التدقيق والنزاهة الرقمية:**")
-                        st.markdown(f"<div style='background-color:#fee2e2; border-right:6px solid #dc2626; padding:15px; border-radius:8px; color:#991b1b; font-weight:bold;'>⚠️ تم رفض هذا الإرسال وحصلت على نسبة 0% بسبب رصد تطابق خط الكتابة أو صور مأخوذة من زميل آخر.</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='background-color:#fee2e2; border-right:6px solid #dc2626; padding:15px; border-radius:8px; color:#991b1b; font-weight:bold;'>⚠️ تم رفض هذا الإرسال وحصلت على نسبة 0% بسبب عدم تطابق الرقم التسلسلي في الهوامش أو رصد تكرار صور من زميل آخر.</div>", unsafe_allow_html=True)
                         st.markdown(f"### 📋 تفاصيل تقرير المخالفة المحفوظ إدارياً:")
                         st.info(lesson_full_reports.get(l_name, "لا يوجد نص تقرير محفوظ."))
                     else:
@@ -549,10 +555,10 @@ def student_space(df_students, df_reports, df_lessons):
                     if saved_pdf_link:
                         st.success(f"🔗 تم رصد رابط ملف الـ PDF المرجعي الخاص بهذا الدرس، وسيقوم الذكاء الاصطناعي باستخراج نصه وتحليله مقارنة بدفرتك.")
                     else:
-                        st.warning("⚠️ تنبيه: لم يقم الأستاذ بإدخال رابط PDF لهذا الدرس بعد، سيتم التدقيق بناءً على الملاحظات المكتوبة فقط.")
+                        st.warning("⚠️ تنبيه: لم يقم الأستاذ بإدخال رابط PDF لهذا الدرس بعد، سيتم التدقيق بناءً على الملاحظات المكتوبة أو المقرر الرسمي.")
 
                     up_files = st.file_uploader(
-                        f"اختر صور صفحات الدفتر لـ {l_name} (🚨 تنبيه: يشترط تحميل 8 صور على الأقل مع إظهار رقم مسار الخاص بك في الدفتر)", 
+                        f"اختر صور صفحات الدفتر لـ {l_name} (🚨 تنبيه: يشترط تحميل 8 صور على الأقل مع كتابة رقمك التسلسلي '{student_serial}' في هوامش الدفتر)", 
                         accept_multiple_files=True, 
                         key=f"up_{student_level}_{l_name}", 
                         type=['jpg','jpeg','png']
@@ -573,6 +579,9 @@ def student_space(df_students, df_reports, df_lessons):
                                         current_hashes.append(calculate_image_hash(f_bytes))
                                         optimized_img = optimize_image_for_api(f)
                                         optimized_images.append(optimized_img)
+                                    
+                                    # تعريف بصمات الصور هنا قبل أي استخدام لها
+                                    hashes_to_save = ",".join(current_hashes)
                                     
                                     pdf_reference_text = ""
                                     if saved_pdf_link:
@@ -629,7 +638,7 @@ def student_space(df_students, df_reports, df_lessons):
                                         f"لا يمكن لتلميذين إرسال نفس صور الدفتر!"
                                     )
                                 else:
-                                    with st.spinner("🔄 جاري مقارنة نصوص الدفتر والتحقق من تطابق رقم مسار مع محتوى الصور واستخراج التقارير..."):
+                                    with st.spinner("🔄 جاري مقارنة نصوص الدفتر والتحقق من تطابق الرقم التسلسلي مع محتوى الصور واستخراج التقارير..."):
                                         try:
                                             past_records_context = ""
                                             if not df_live_reports.empty and 'الدرس' in df_live_reports.columns and 'بصمة_الخط' in df_live_reports.columns:
@@ -640,7 +649,7 @@ def student_space(df_students, df_reports, df_lessons):
 
                                             prompt_instructions = f"""
                                             أنت مساعد أستاذ الرياضيات عبد الباسط منصوري بالثانوية التأهيلية المغربية. 
-                                            التلميذ {student_name} (رقم مسار الخاص به: {student_massar}، المستوى: {student_level}، القسم: {st.session_state.user['class']}) أرسل صور دفتره لدرس ({l_name}).
+                                            التلميذ(ة) {student_name} (الرقم التسلسلي الرسمي: {student_serial}، رقم مسار: {student_massar}، المستوى: {student_level}، القسم: {st.session_state.user['class']}) أرسل صور دفتره لدرس ({l_name}).
                                             
                                             المحتوى النصي المستخرج من ملف الـ PDF المرجعي للأستاذ:
                                             \"\"\"{pdf_reference_text[:15000]}\"\"\"
@@ -652,9 +661,9 @@ def student_space(df_students, df_reports, df_lessons):
                                             \"\"\"{past_records_context}\"\"\"
                                   
                                             التعليمات الصارمة والأساسية:
-                                            1. افحص بدقة صور الدفتر المرفقة للبحث عن الرقم التسلسلي للتلميذ ({hashes_to_save}) المكتوب بخط اليد داخل صفحات الدفتر.
-                                            2. تحقق مما إذا كان الرقم الظاهر في الدفتر يتطابق مع رقم التسلسلي للتلميذ ({hashes_to_save}). إذا تبين أن الدفتر يخص شخصاً آخر أو لا يحتوي على الرقم التسلسلي، امنحه نسبة 0% واعتبرها حالة تزوير/عدم مطابقة الهوية.
-                                            3. قارن بدقة بين صور الدفتر والمحتوى النصي للدرس المرجعي أعلاه لاستخراج نسبة المطابقة وإنجاز الفقرات والتمارين.
+                                            1. افحص بدقة هوامش صور الدفتر المرفقة للبحث عن الرقم التسلسلي للتلميذ(ة) وهو: ({student_serial}) مكتوباً بخط اليد داخل صفحات الدفتر.
+                                            2. تحقق مما إذا كان الرقم التسلسلي الظاهر في الهوامش يتطابق مع الرقم التسلسلي الرسمي ({student_serial}). إذا تبين أن الدفتر يحمل رقماً تسلسلياً آخر أو لا يحتوي على الرقم التسلسلي في الهوامش، امنحه نسبة 0% واعتبرها حالة عدم مطابقة الهوية مع ذكر السبب في التقرير.
+                                            3. قارن بدقة بين صور الدفتر والمحتوى النصي للدرس المرجعي أعلاه (أو المقرر الرسمي المغربي إن لم يتوفر نص) لاستخراج نسبة المطابقة وإنجاز الفقرات والتمارين.
                                             4. إذا كان السجل سليماً ومطابقاً، اكتب تقريراً مفصلاً للمقارنة بين محتوى الدرس ودفتر التلميذ، واختم بالسطر الحتمي:
                                                النسبة النهائية: X%
                                             """
@@ -686,10 +695,9 @@ def student_space(df_students, df_reports, df_lessons):
                                                 st.stop()
                                                 
                                             calculated_percentage = extract_percentage_from_report(report_text)
-                                            hashes_to_save = ",".join(current_hashes)
 
-                                            # تفريغ السطر وفق الأعمدة الثمانية بالضبط (A إلى H):
-                                            # A: التاريخ | B: رقم مسار | C: الاسم | D: القسم | E: الدرس | F: التقرير | G: بصمات_الصور | H: النسبة (بدل بصمة الخط)
+                                            # تفريغ السطر وفق الأعمدة الثمانية بالضبط (A إلى H) كما في ملفك:
+                                            # A: التاريخ | B: رقم مسار | C: الاسم | D: القسم | E: الدرس | F: التقرير | G: بصمات_الصور | H: النسبة
                                             live_sh.append_row([
                                                 datetime.now().strftime("%Y-%m-%d"),          # A (التاريخ)
                                                 student_massar.upper(),                       # B (رقم مسار)
@@ -704,7 +712,7 @@ def student_space(df_students, df_reports, df_lessons):
                                             st.cache_data.clear()
                                             
                                             if calculated_percentage == "0%":
-                                                st.error("🚨 تم رفض الملف وتسجيل نسبة 0% بسبب رصد مخالفة أو عدم تطابق رقم مسار!")
+                                                st.error("🚨 تم رفض الملف وتسجيل نسبة 0% بسبب عدم تطابق الرقم التسلسلي في الهوامش أو رصد مخالفة!")
                                             else:
                                                 st.success(f"تم تحليل المقارنة بنجاح وحفظ التقرير! نسبة الإنجاز المسجلة: {calculated_percentage} ✅")
                                                 
