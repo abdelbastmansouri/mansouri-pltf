@@ -120,6 +120,16 @@ def get_gcp_credentials():
 def get_gspread_client():
     return gspread.authorize(get_gcp_credentials())
 
+# دالة ذكية لتحديد المستوى الدراسي تلقائياً من اسم القسم
+def detect_level_from_class(class_name, explicit_level=""):
+    c_up = str(class_name).strip().upper()
+    exp = str(explicit_level).strip()
+    if exp and exp not in ["", "None", "nan"]:
+        return exp
+    if "1BAC" in c_up or "1 BAC" in c_up or "أولى" in c_up:
+        return "أولى باكالوريا علوم (1 باك SEF)"
+    return "جذع مشترك علوم"
+
 def extract_file_id_from_drive_link(link):
     match = re.search(r'/d/([a-zA-Z0-9_-]+)', link)
     if match:
@@ -160,17 +170,18 @@ def extract_text_from_drive_pdf(drive_link):
 def calculate_image_hash(file_bytes):
     return hashlib.md5(file_bytes).hexdigest()
 
+# رفع الدقة إلى 1300px وجودة 82% لكي تظهر الأرقام الصغيرة في الهوامش بوضوح تام
 def optimize_image_for_api(uploaded_file):
     try:
         img = Image.open(uploaded_file)
-        max_size = 900
+        max_size = 1300
         if img.width > max_size or img.height > max_size:
             img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
         
         buffer = io.BytesIO()
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
-        img.save(buffer, format="JPEG", quality=70)
+        img.save(buffer, format="JPEG", quality=82)
         buffer.seek(0)
         return Image.open(buffer)
     except:
@@ -335,6 +346,7 @@ def admin_space(df_students, df_reports, df_lessons):
                         updated = False
                         for row in rows:
                             if len(row) >= 2 and row[0].strip() == selected_level.strip() and row[1].strip() == selected_lesson_num.strip():
+                                while len(row) < 5: row.append("")
                                 row[2] = ref_note
                                 row[3] = input_drive_link
                                 row[4] = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -422,7 +434,7 @@ def admin_space(df_students, df_reports, df_lessons):
 
     with tab4:
         st.markdown("<div class='section-title'>⚙️ إعدادات الصيانة والأمان</div>", unsafe_allow_html=True)
-        st.info("تم ضبط النظام ليتطابق مع الأعمدة الثمانية في ورقة Reports على Google Sheets.")
+        st.info("تم ضبط النظام ليتطابق مع الأعمدة الثمانية في ورقة Reports على Google Sheets ويستنتج المستوى تلقائياً من اسم القسم.")
 
 # --- واجهة التلميذ ---
 def student_space(df_students, df_reports, df_lessons):
@@ -463,7 +475,9 @@ def student_space(df_students, df_reports, df_lessons):
                 ]
                 if not matched_student.empty:
                     row_std = matched_student.iloc[0]
-                    student_level_val = str(row_std.get('المستوى', 'جذع مشترك علوم')).strip()
+                    raw_level = str(row_std.get('المستوى', '')).strip() if 'المستوى' in row_std else ""
+                    # استنتاج المستوى تلقائياً من اسم القسم (1BACSEF -> أولى باكالوريا علوم)
+                    student_level_val = detect_level_from_class(sel_class, raw_level)
                     student_serial_val = str(row_std.get(col_serial, 'غير محدد')).strip() if col_serial in row_std else 'غير محدد'
                     
                     st.session_state.auth = True
@@ -482,7 +496,8 @@ def student_space(df_students, df_reports, df_lessons):
         student_name = st.session_state.user['name']
         student_massar = st.session_state.user.get('massar', '')
         student_serial = st.session_state.user.get('serial', 'غير محدد')
-        student_level = st.session_state.user.get('level', 'جذع مشترك علوم')
+        # إعادة التأكد من المستوى بناءً على القسم حتى لو كانت الجلسة مفتوحة
+        student_level = detect_level_from_class(st.session_state.user['class'], st.session_state.user.get('level', ''))
         
         st.success(f"🏫 التلميذ(ة): **{student_name}** | الرقم التسلسلي: **{student_serial}** | مسار: **{student_massar}** | المستوى: **{student_level}** | القسم: **{st.session_state.user['class']}**")
         
@@ -553,9 +568,9 @@ def student_space(df_students, df_reports, df_lessons):
                     saved_note, saved_pdf_link = get_lesson_ref_and_pdf(student_level, l_name, df_lessons)
                     
                     if saved_pdf_link:
-                        st.success(f"🔗 تم رصد رابط ملف الـ PDF المرجعي الخاص بهذا الدرس، وسيقوم الذكاء الاصطناعي باستخراج نصه وتحليله مقارنة بدفرتك.")
+                        st.success(f"🔗 تم رصد رابط ملف الـ PDF المرجعي الخاص بهذا الدرس ({student_level})، وسيقوم الذكاء الاصطناعي باستخراج نصه وتحليله مقارنة بدفرتك.")
                     else:
-                        st.warning("⚠️ تنبيه: لم يقم الأستاذ بإدخال رابط PDF لهذا الدرس بعد، سيتم التدقيق بناءً على الملاحظات المكتوبة أو المقرر الرسمي.")
+                        st.warning(f"⚠️ تنبيه: لم يقم الأستاذ بإدخال رابط PDF لهذا الدرس ({student_level}) بعد، سيتم التدقيق بناءً على المقرر الرسمي المغربي.")
 
                     up_files = st.file_uploader(
                         f"اختر صور صفحات الدفتر لـ {l_name} (🚨 تنبيه: يشترط تحميل 8 صور على الأقل مع كتابة رقمك التسلسلي '{student_serial}' في هوامش الدفتر)", 
@@ -580,7 +595,6 @@ def student_space(df_students, df_reports, df_lessons):
                                         optimized_img = optimize_image_for_api(f)
                                         optimized_images.append(optimized_img)
                                     
-                                    # تعريف بصمات الصور هنا قبل أي استخدام لها
                                     hashes_to_save = ",".join(current_hashes)
                                     
                                     pdf_reference_text = ""
@@ -640,31 +654,26 @@ def student_space(df_students, df_reports, df_lessons):
                                 else:
                                     with st.spinner("🔄 جاري مقارنة نصوص الدفتر والتحقق من تطابق الرقم التسلسلي مع محتوى الصور واستخراج التقارير..."):
                                         try:
-                                            past_records_context = ""
-                                            if not df_live_reports.empty and 'الدرس' in df_live_reports.columns and 'بصمة_الخط' in df_live_reports.columns:
-                                                same_lesson_df = df_live_reports[df_live_reports['الدرس'] == l_name]
-                                                for idx, row in same_lesson_df.iterrows():
-                                                    if str(row.get('massar_clean', '')).strip().upper() != student_massar.upper():
-                                                        past_records_context += f"- التلميذ(ة): {row.get('الاسم', 'مجهول')} | نسبته: {row.get('بصمة_الخط', 'لا يوجد')}\n\n"
-
                                             prompt_instructions = f"""
                                             أنت مساعد أستاذ الرياضيات عبد الباسط منصوري بالثانوية التأهيلية المغربية. 
-                                            التلميذ(ة) {student_name} (الرقم التسلسلي الرسمي: {student_serial}، رقم مسار: {student_massar}، المستوى: {student_level}، القسم: {st.session_state.user['class']}) أرسل صور دفتره لدرس ({l_name}).
+                                            التلميذ(ة): {student_name}
+                                            الرقم التسلسلي الرسمي (المكون من 4 أرقام): {student_serial}
+                                            رقم مسار: {student_massar}
+                                            المستوى الدراسي الفعلي: {student_level}
+                                            القسم: {st.session_state.user['class']}
+                                            الدرس المستهدف: {l_name}
                                             
-                                            المحتوى النصي المستخرج من ملف الـ PDF المرجعي للأستاذ:
+                                            المحتوى النصي المستخرج من ملف الـ PDF المرجعي للأستاذ الخاص بمستوى ({student_level}):
                                             \"\"\"{pdf_reference_text[:15000]}\"\"\"
 
                                             الملاحظات الإضافية المحددة من الأستاذ:
                                             \"\"\"{saved_note}\"\"\"
-                                            
-                                            أرشيف النسب والتفاصيل للتلاميذ الآخرين:
-                                            \"\"\"{past_records_context}\"\"\"
                                   
-                                            التعليمات الصارمة والأساسية:
-                                            1. افحص بدقة هوامش صور الدفتر المرفقة للبحث عن الرقم التسلسلي للتلميذ(ة) وهو: ({student_serial}) مكتوباً بخط اليد داخل صفحات الدفتر.
-                                            2. تحقق مما إذا كان الرقم التسلسلي الظاهر في الهوامش يتطابق مع الرقم التسلسلي الرسمي ({student_serial}). إذا تبين أن الدفتر يحمل رقماً تسلسلياً آخر أو لا يحتوي على الرقم التسلسلي في الهوامش، امنحه نسبة 0% واعتبرها حالة عدم مطابقة الهوية مع ذكر السبب في التقرير.
-                                            3. قارن بدقة بين صور الدفتر والمحتوى النصي للدرس المرجعي أعلاه (أو المقرر الرسمي المغربي إن لم يتوفر نص) لاستخراج نسبة المطابقة وإنجاز الفقرات والتمارين.
-                                            4. إذا كان السجل سليماً ومطابقاً، اكتب تقريراً مفصلاً للمقارنة بين محتوى الدرس ودفتر التلميذ، واختم بالسطر الحتمي:
+                                            التعليمات الصارمة والدقيقة جداً:
+                                            1. **التحقق البصري الدقيق من الرقم التسلسلي ({student_serial}):** افحص بدقة هوامش وزوايا جميع صور الدفتر المرفقة (أعلى أو أسفل أو يمين أو يسار الصفحة) لقراءة الرقم المكتوب بخط اليد. انتبه جيداً للأرقام المتجاورة حتى لا تقرأ رقماً واحداً فقط (مثلاً اقرأ {student_serial} كاملاً وليس الرقم الأول فقط).
+                                            2. إذا وجدت الرقم التسلسلي ({student_serial}) مكتوباً بوضوح في أغلب الصفحات المرفقة، فهذا يؤكد هوية التلميذ(ة). أما إذا وجدت رقماً تسلسلياً مختلفاً تماماً يعود لتلميذ آخر، أو لم تجد أي رقم تسلسلي نهائياً في الصفحات، فامنحه نسبة 0% واعتبرها حالة عدم مطابقة الهوية.
+                                            3. **المقارنة البيداغوجية:** قارن محتوى الدفتر مع درس ({l_name}) الخاص بمستوى **{student_level}** (المستخرج من الـ PDF أعلاه أو من المقرر المغربي الرسمي لهذا المستوى تحديداً).
+                                            4. اكتب تقريراً مفصلاً ومشجعاً للتلميذ(ة) يوضح مدى استيفاء الفقرات والتمارين، واختم التقرير في آخر سطر حصرياً بالصيغة التالية:
                                                النسبة النهائية: X%
                                             """
                                             
@@ -696,8 +705,6 @@ def student_space(df_students, df_reports, df_lessons):
                                                 
                                             calculated_percentage = extract_percentage_from_report(report_text)
 
-                                            # تفريغ السطر وفق الأعمدة الثمانية بالضبط (A إلى H) كما في ملفك:
-                                            # A: التاريخ | B: رقم مسار | C: الاسم | D: القسم | E: الدرس | F: التقرير | G: بصمات_الصور | H: النسبة
                                             live_sh.append_row([
                                                 datetime.now().strftime("%Y-%m-%d"),          # A (التاريخ)
                                                 student_massar.upper(),                       # B (رقم مسار)
