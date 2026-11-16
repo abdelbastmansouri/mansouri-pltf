@@ -176,6 +176,21 @@ def optimize_image_for_api(uploaded_file):
     except:
         return Image.open(uploaded_file)
 
+def extract_percentage_from_report(report_str):
+    match_pct = re.search(r"النسبة\s+النهائية:\s*(\d+%)", str(report_str))
+    return match_pct.group(1) if match_pct else "100%"
+
+def normalize_reports_df(df):
+    df.columns = df.columns.str.strip()
+    for col in df.columns:
+        if col in ["إسم", "اسم", "اسم التلميذ", "إسم التلميذ"]:
+            df = df.rename(columns={col: "الاسم"})
+        elif col.startswith("الدرس"):
+            df = df.rename(columns={col: "الدرس"})
+        elif col in ["بصمة_الصور", "بصمات الصور", "بصمة الصور"]:
+            df = df.rename(columns={col: "بصمات_الصور"})
+    return df
+
 @st.cache_data(ttl=2)
 def load_data():
     sh = None
@@ -208,14 +223,11 @@ def load_data():
         if reports_rows and len(reports_rows) > 1:
             reports_headers = [h.strip() for h in reports_rows[0]]
             df_reports = pd.DataFrame(reports_rows[1:], columns=reports_headers)
-            df_reports.columns = df_reports.columns.str.strip()
-            for col in df_reports.columns:
-                if col in ["إسم", "اسم", "اسم التلميذ", "إسم التلميذ"]:
-                    df_reports = df_reports.rename(columns={col: "الاسم"})
+            df_reports = normalize_reports_df(df_reports)
         else:
-            df_reports = pd.DataFrame(columns=["التاريخ", "رقم مسار", "الاسم", "القسم", "المستوى", "الدرس", "التقرير", "النسبة", "بصمات_الصور", "بصمة_الخط"])
+            df_reports = pd.DataFrame(columns=["التاريخ", "رقم مسار", "الاسم", "القسم", "الدرس", "التقرير", "بصمات_الصور", "بصمة_الخط"])
     except:
-        df_reports = pd.DataFrame(columns=["التاريخ", "رقم مسار", "الاسم", "القسم", "المستوى", "الدرس", "التقرير", "النسبة", "بصمات_الصور", "بصمة_الخط"])
+        df_reports = pd.DataFrame(columns=["التاريخ", "رقم مسار", "الاسم", "القسم", "الدرس", "التقرير", "بصمات_الصور", "بصمة_الخط"])
         
     try:
         lessons_worksheet = sh.worksheet("Lessons")
@@ -296,22 +308,15 @@ def admin_space(df_students, df_reports, df_lessons):
     with tab2:
         st.markdown("<div class='section-title'>📂 إدخال وربط روابط الدروس (Google Drive)</div>", unsafe_allow_html=True)
         
-        # 1. اختيار المستوى الدراسي أولاً
         selected_level = st.selectbox("1️⃣ اختر المستوى الدراسي:", ["جذع مشترك علوم", "أولى باكالوريا علوم (1 باك SEF)"])
-        
-        # 2. تنبثق خانة لاختيار الدرس (الدرس 1 إلى الدرس 12)
         lesson_list_options = [f"الدرس {i}" for i in range(1, 13)]
         selected_lesson_num = st.selectbox("2️⃣ اختر الدرس المستهدف:", lesson_list_options)
         
-        # جلب المعطيات الحالية للدرس المختارة إن وجدت
         current_note, current_pdf_link = get_lesson_ref_and_pdf(selected_level, selected_lesson_num, df_lessons)
         
         st.info(f"📋 حالة الدرس في السجل الحالي:\n- المستوى: {selected_level}\n- الدرس: {selected_lesson_num}\n- الرابط الحالي: {current_pdf_link if current_pdf_link else 'لا يوجد رابط مدخل بعد'}")
         
-        # 3. خانة إدخال الرابط مباشرة
         input_drive_link = st.text_input("3️⃣ أدخل رابط ملف الـ PDF من Google Drive هنا:", value=current_pdf_link).strip()
-        
-        # 4. ملاحظات إضافية للذكاء الاصطناعي
         ref_note = st.text_area("أدخل ملاحظات أو توجيهات إضافية للذكاء الاصطناعي (اختياري):", height=100, value=current_note).strip()
 
         if st.button("💾 حفظ وتحديث السجل في Google Sheets", use_container_width=True):
@@ -394,9 +399,9 @@ def admin_space(df_students, df_reports, df_lessons):
                                     deleted_count = 0
                                     
                                     for row in old_records:
-                                        if len(row) >= 6:
+                                        if len(row) >= 5:
                                             row_massar = str(row[1]).strip().upper()
-                                            row_lesson = str(row[5]).strip()
+                                            row_lesson = str(row[4]).strip()
                                             
                                             match_massar = (row_massar == target_massar_id)
                                             match_lesson = (target_lesson_to_reset == "كل الدروس" or row_lesson == target_lesson_to_reset)
@@ -417,7 +422,7 @@ def admin_space(df_students, df_reports, df_lessons):
 
     with tab4:
         st.markdown("<div class='section-title'>⚙️ إعدادات الصيانة والأمان</div>", unsafe_allow_html=True)
-        st.info("تم ضبط النظام بحيث يدخل الأستاذ روابط Google Drive يدوياً وتتخزن مباشرة في Google Sheets.")
+        st.info("تم ضبط النظام ليتطابق مع الأعمدة الثمانية في ورقة Reports على Google Sheets.")
 
 # --- واجهة التلميذ ---
 def student_space(df_students, df_reports, df_lessons):
@@ -475,7 +480,7 @@ def student_space(df_students, df_reports, df_lessons):
         st.success(f"🏫 التلميذ(ة): **{student_name}** | مسار: **{student_massar}** | المستوى: **{student_level}** | القسم: **{st.session_state.user['class']}**")
         
         student_all_submissions = pd.DataFrame()
-        if not df_reports.empty and 'رقم مسار' in df_reports.columns:
+        if not df_reports.empty and 'رقم مسار' in df_reports.columns and 'الدرس' in df_reports.columns:
             df_reports['massar_clean'] = df_reports['رقم مسار'].astype(str).str.strip().str.upper()
             df_reports['الدرس_نظيف'] = df_reports['الدرس'].astype(str).str.strip()
             student_all_submissions = df_reports[df_reports['massar_clean'] == student_massar.upper()]
@@ -487,8 +492,14 @@ def student_space(df_students, df_reports, df_lessons):
         if not student_all_submissions.empty:
             for _, row in student_all_submissions.iterrows():
                 l_clean = str(row['الدرس_نظيف'])
-                lesson_percentages[l_clean] = str(row['النسبة']).strip()
-                lesson_full_reports[l_clean] = row['التقرير']
+                rep_content = str(row.get('التقرير', ''))
+                lesson_full_reports[l_clean] = rep_content
+                # استخراج النسبة إما من العمود H (بصمة_الخط) إذا كانت مسجلة فيه، أو من نص التقرير
+                col_h_val = str(row.get('بصمة_الخط', '')).strip()
+                if "%" in col_h_val:
+                    lesson_percentages[l_clean] = col_h_val
+                else:
+                    lesson_percentages[l_clean] = extract_percentage_from_report(rep_content)
         
         st.markdown("<div class='section-title'>📊 وضعيتك الحالية في السجل الرقمي:</div>", unsafe_allow_html=True)
         
@@ -513,7 +524,6 @@ def student_space(df_students, df_reports, df_lessons):
             with tab:
                 l_name = f"الدرس {i+1}"
                 
-                # التحقق مما إذا كان التلميذ قد أرسل هذا الدرس مسبقاً
                 if l_name in submitted_lessons:
                     current_p = lesson_percentages.get(l_name, "N/A")
                     if current_p == "0%":
@@ -533,7 +543,6 @@ def student_space(df_students, df_reports, df_lessons):
                             """, unsafe_allow_html=True)
                 
                 else:
-                    # إذا لم يرسله بعد، تظهر واجهة الرفع
                     st.markdown(f"#### 📸 centre de dépôt des cahiers - {l_name} ({student_level})")
                     saved_note, saved_pdf_link = get_lesson_ref_and_pdf(student_level, l_name, df_lessons)
                     
@@ -577,13 +586,23 @@ def student_space(df_students, df_reports, df_lessons):
                                         if live_rows and len(live_rows) > 1:
                                             live_headers = [h.strip() for h in live_rows[0]]
                                             df_live_reports = pd.DataFrame(live_rows[1:], columns=live_headers)
-                                            df_live_reports.columns = df_live_reports.columns.str.strip()
+                                            df_live_reports = normalize_reports_df(df_live_reports)
                                         else:
-                                            df_live_reports = pd.DataFrame(columns=["التاريخ", "رقم مسار", "الاسم", "القسم", "المستوى", "الدرس", "التقرير", "النسبة", "بصمات_الصور", "بصمة_الخط"])
+                                            df_live_reports = pd.DataFrame(columns=["التاريخ", "رقم مسار", "الاسم", "القسم", "الدرس", "التقرير", "بصمات_الصور", "بصمة_الخط"])
                                     except Exception as check_err:
                                         st.error(f"❌ تعذر الاتصال بالسيرفر للتحقق من الأرشيف: {check_err}")
                                         st.stop()
                                 
+                                if not df_live_reports.empty and 'رقم مسار' in df_live_reports.columns and 'الدرس' in df_live_reports.columns:
+                                    already_exists = df_live_reports[
+                                        (df_live_reports['رقم مسار'].astype(str).str.strip().str.upper() == student_massar.upper()) &
+                                        (df_live_reports['الدرس'].astype(str).str.strip() == l_name.strip())
+                                    ]
+                                    if not already_exists.empty:
+                                        st.warning("⚠️ تم تسجيل هذا الدرس مسبقاً في السجل! جاري تحديث الواجهة...")
+                                        st.cache_data.clear()
+                                        st.rerun()
+
                                 cheater_detected = False
                                 original_student_name = ""
                                 
@@ -614,10 +633,10 @@ def student_space(df_students, df_reports, df_lessons):
                                         try:
                                             past_records_context = ""
                                             if not df_live_reports.empty and 'الدرس' in df_live_reports.columns and 'بصمة_الخط' in df_live_reports.columns:
-                                                same_lesson_df = df_live_reports[(df_live_reports['الدرس'] == l_name) & (df_live_reports.get('المستوى', student_level) == student_level)]
+                                                same_lesson_df = df_live_reports[df_live_reports['الدرس'] == l_name]
                                                 for idx, row in same_lesson_df.iterrows():
                                                     if str(row.get('massar_clean', '')).strip().upper() != student_massar.upper():
-                                                        past_records_context += f"- التلميذ(ة): {row.get('الاسم', 'مجهول')} | بصمة خطه: {row.get('بصمة_الخط', 'لا يوجد')}\n\n"
+                                                        past_records_context += f"- التلميذ(ة): {row.get('الاسم', 'مجهول')} | نسبته: {row.get('بصمة_الخط', 'لا يوجد')}\n\n"
 
                                             prompt_instructions = f"""
                                             أنت مساعد أستاذ الرياضيات عبد الباسط منصوري بالثانوية التأهيلية المغربية. 
@@ -629,18 +648,15 @@ def student_space(df_students, df_reports, df_lessons):
                                             الملاحظات الإضافية المحددة من الأستاذ:
                                             \"\"\"{saved_note}\"\"\"
                                             
-                                            أرشيف بصمات الخطوط للتلاميذ الآخرين:
-                                            \"\"\"{past_records_context}\"\"`
+                                            أرشيف النسب والتفاصيل للتلاميذ الآخرين:
+                                            \"\"\"{past_records_context}\"\"\"
                                   
                                             التعليمات الصارمة والأساسية:
                                             1. افحص بدقة صور الدفتر المرفقة للبحث عن رقم مسار أو الرقم التسلسلي للتلميذ ({student_massar}) المكتوب بخط اليد داخل صفحات الدفتر.
                                             2. تحقق مما إذا كان الرقم الظاهر في الدفتر يتطابق مع رقم مسار التلميذ ({student_massar}). إذا تبين أن الدفتر يخص شخصاً آخر أو لا يحتوي على رقم مسار الصحيح، امنحه نسبة 0% واعتبرها حالة تزوير/عدم مطابقة الهوية.
-                                            3. قارن بدقة بين صور دفتر التلميذ والمحتوى النصي للدرس المرجعي أعلاه لاستخراج نسبة المطابقة وإنجاز الفقرات والتمارين.
-                                            4. استخرج "بصمة بصرية فريدة للخط والكتابة" في سطرين.
-                                            5. إذا كان السجل سليماً ومطابقاً، اكتب تقريراً مفصلاً للمقارنة بين محتوى الدرس ودفتر التلميذ، واختم بالسطر الحتمي:
+                                            3. قارن بدقة بين صور دفتر الدفتر والمحتوى النصي للدرس المرجعي أعلاه لاستخراج نسبة المطابقة وإنجاز الفقرات والتمارين.
+                                            4. إذا كان السجل سليماً ومطابقاً، اكتب تقريراً مفصلاً للمقارنة بين محتوى الدرس ودفتر التلميذ، واختم بالسطر الحتمي:
                                                النسبة النهائية: X%
-                                               
-                                            بصمة الخط المستخرجة حالياً: [ضع هنا الوصف البصري الفريد للخط]
                                             """
                                             
                                             model = genai.GenerativeModel("gemini-2.5-flash")
@@ -669,27 +685,20 @@ def student_space(df_students, df_reports, df_lessons):
                                                 st.error("🚨 خادم الفحص السحابي ممتلئ أو استغرق وقتاً طويلاً. يرجى المحاولة بعد قليل.")
                                                 st.stop()
                                                 
-                                            calculated_percentage = "100%"
-                                            match_pct = re.search(r"النسبة\s+النهائية:\s*(\d+%)", report_text)
-                                            if match_pct: calculated_percentage = match_pct.group(1)
-
-                                            extracted_handwriting_profile = "خط قياسي غير مصنف."
-                                            match_profile = re.search(r"بصمة الخط المستخرجة حالياً:\s*(.*)", report_text)
-                                            if match_profile: extracted_handwriting_profile = match_profile.group(1).strip()
-
+                                            calculated_percentage = extract_percentage_from_report(report_text)
                                             hashes_to_save = ",".join(current_hashes)
 
+                                            # تفريغ السطر وفق الأعمدة الثمانية بالضبط (A إلى H):
+                                            # A: التاريخ | B: رقم مسار | C: الاسم | D: القسم | E: الدرس | F: التقرير | G: بصمات_الصور | H: النسبة (بدل بصمة الخط)
                                             live_sh.append_row([
-                                                datetime.now().strftime("%Y-%m-%d"),          
-                                                student_massar.upper(),                       
-                                                student_name,                                 
-                                                st.session_state.user['class'],               
-                                                student_level,                                
-                                                l_name,                                       
-                                                report_text,                                  
-                                                calculated_percentage,                        
-                                                hashes_to_save,                               
-                                                extracted_handwriting_profile                 
+                                                datetime.now().strftime("%Y-%m-%d"),          # A (التاريخ)
+                                                student_massar.upper(),                       # B (رقم مسار)
+                                                student_name,                                 # C (الاسم)
+                                                st.session_state.user['class'],               # D (القسم)
+                                                l_name,                                       # E (الدرس)
+                                                report_text,                                  # F (التقرير)
+                                                hashes_to_save,                               # G (بصمات_الصور)
+                                                calculated_percentage                         # H (النسبة)
                                             ])
                                             
                                             st.cache_data.clear()
