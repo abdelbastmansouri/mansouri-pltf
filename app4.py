@@ -188,7 +188,6 @@ def optimize_image_for_api(uploaded_file):
     except:
         return Image.open(uploaded_file)
 
-# دالة محصّنة لاستخراج النسبة المئوية كاملة (بما في ذلك الأعداد العشرية مثل 98.78% أو بدون علامة %)
 def extract_percentage_from_report(report_str):
     text = str(report_str)
     match_pct = re.search(r"النسبة\s+النهائية[\s\*]*:[\s\*]*(\d+(?:[\.,]\d+)?)\s*%?", text)
@@ -446,7 +445,7 @@ def admin_space(df_students, df_reports, df_lessons):
 
     with tab4:
         st.markdown("<div class='section-title'>⚙️ إعدادات الصيانة والأمان</div>", unsafe_allow_html=True)
-        st.info("تم تفعيل قاعدة الصندوق المغلق، والتدقيق الدقيق في عدد أسئلة كل تمرين، والاستخراج الكامل للنسب المئوية العشرية.")
+        st.info("تم ضبط النظام لإتمام التحليل الكامل للدفتر دائماً، مع إيداع إشعار حالة الغش وتطابق الرقم التسلسلي في الفقرة الأخيرة من التقرير ومنح 0% عند ثبوت المخالفة.")
 
 # --- واجهة التلميذ ---
 def student_space(df_students, df_reports, df_lessons):
@@ -544,7 +543,7 @@ def student_space(df_students, df_reports, df_lessons):
                 if l_sub in submitted_lessons:
                     pct = lesson_percentages.get(l_sub, "0%")
                     if pct == "0%":
-                        status_text += f"🚨 تم تدقيق <b>{l_sub}</b> وتم رصد <b>مخالفة/عدم تطابق الهوية</b> (النسبة: <span style='color:white; background:#dc2626; padding:2px 8px; border-radius:4px;'><b>0%</b></span>)<br>"
+                        status_text += f"🚨 تم تدقيق <b>{l_sub}</b> وتم رصد <b>مخالفة/حالة غش في الرقم التسلسلي</b> (النسبة: <span style='color:white; background:#dc2626; padding:2px 8px; border-radius:4px;'><b>0%</b></span>)<br>"
                     else:
                         status_text += f"✅ نسبة تدوينك وإنجازك لـ <b>{l_sub}</b> هي: <span style='color:#ffffff; background:#1e3a8a; padding:2px 10px; border-radius:5px;'><b>{pct}</b></span><br>"
             st.markdown(f"<div class='status-box'>{status_text}</div>", unsafe_allow_html=True)
@@ -561,8 +560,8 @@ def student_space(df_students, df_reports, df_lessons):
                     current_p = lesson_percentages.get(l_name, "0%")
                     if current_p == "0%":
                         st.error(f"🚨 **تنبيه نظام التدقيق والنزاهة الرقمية:**")
-                        st.markdown(f"<div style='background-color:#fee2e2; border-right:6px solid #dc2626; padding:15px; border-radius:8px; color:#991b1b; font-weight:bold;'>⚠️ تم رفض هذا الإرسال وحصلت على نسبة 0% بسبب عدم مطابقة الهوية أو إرسال محتوى لا يخص الدرس.</div>", unsafe_allow_html=True)
-                        st.markdown(f"### 📋 تفاصيل تقرير المخالفة المحفوظ إدارياً:")
+                        st.markdown(f"<div style='background-color:#fee2e2; border-right:6px solid #dc2626; padding:15px; border-radius:8px; color:#991b1b; font-weight:bold;'>⚠️ تم رصد حالة غش / عدم تطابق الرقم التسلسلي في الصفحات. تجد تفاصيل التحليل الكامل وملاحظة المخالفة في الفقرة الأخيرة أسفله.</div>", unsafe_allow_html=True)
+                        st.markdown(f"### 📋 تفاصيل التقرير الكامل وملاحظة المخالفة المحفوظة إدارياً:")
                         st.info(lesson_full_reports.get(l_name, "لا يوجد نص تقرير محفوظ."))
                     else:
                         st.success(f"🔒 **تم تدقيق {l_name} بنجاح:** نسبة تدوين الدرس المسجلة هي (**{current_p}**).")
@@ -580,12 +579,12 @@ def student_space(df_students, df_reports, df_lessons):
                     saved_note, saved_pdf_link = get_lesson_ref_and_pdf(student_level, l_name, df_lessons)
                     
                     if saved_pdf_link or saved_note:
-                        st.success(f"🔗 تم رصد مرجع الدرس للأستاذ ({student_level})؛ سيتم تدقيق نقل الفقرات وتصحيح التمارين المكتوبة في دفترك.")
+                        st.success(f"🔗 تم رصد مرجع الدرس للأستاذ ({student_level})؛ سيتم تدقيق تدوين الفقرات وتصحيح التمارين والتحقق من رقمك التسلسلي.")
                     else:
                         st.warning(f"⚠️ تنبيه: لم يقم الأستاذ بإدخال مرجع لهذا الدرس ({student_level}) بعد، سيتم التدقيق بناءً على المقرر الرسمي المغربي.")
 
                     up_files = st.file_uploader(
-                        f"اختر صور صفحات الدفتر لـ {l_name} (🚨 يشترط تحميل 8 صور على الأقل مع كتابة رقمك التسلسلي '{student_serial}' في الهوامش والتأكد من نقل جميع فقرات الدرس وتصحيح التمارين كاملة):", 
+                        f"اختر صور صفحات الدفتر لـ {l_name} (🚨 يشترط تحميل 8 صور على الأقل مع كتابة رقمك التسلسلي '{student_serial}' في هوامش جميع الصفحات):", 
                         accept_multiple_files=True, 
                         key=f"up_{student_level}_{l_name}", 
                         type=['jpg','jpeg','png']
@@ -596,7 +595,7 @@ def student_space(df_students, df_reports, df_lessons):
                             if len(up_files) < 8:
                                 st.error(f"⚠️ **خطأ في معايير قبول الدفتر:** لقد قمت برفع ({len(up_files)}) صور فقط! ميثاق المادة يشترط رفع **8 صور على الأقل** للدرس.")
                             else:
-                                with st.spinner("🔄 جاري مطابقة فقرات الدرس وعدّ أسئلة التمارين وتصحيحها في دفترك..."):
+                                with st.spinner("🔄 جاري تدقيق تدوين الدرس والتمارين والتحقق من الرقم التسلسلي على الصفحات..."):
                                     current_hashes = []
                                     optimized_images = []
                                     
@@ -638,124 +637,113 @@ def student_space(df_students, df_reports, df_lessons):
                                         st.cache_data.clear()
                                         st.rerun()
 
-                                cheater_detected = False
-                                original_student_name = ""
-                                
-                                if "بصمات_الصور" in df_live_reports.columns:
-                                    df_live_reports['massar_clean'] = df_live_reports['رقم مسار'].astype(str).str.strip().str.upper() if "رقم مسار" in df_live_reports.columns else ""
+                                # تجميع لائحة التلاميذ وأرقامهم التسلسلية المسجلة لمساعدة الذكاء الاصطناعي على كشف صاحب الدفتر الأصلي في حال التطابق
+                                students_serial_lookup = ""
+                                if not df_students.empty and col_serial in df_students.columns and col_name in df_students.columns:
+                                    serial_entries = []
+                                    for _, s_row in df_students.iterrows():
+                                        s_ser = str(s_row.get(col_serial, '')).strip()
+                                        s_nm = str(s_row.get(col_name, '')).strip()
+                                        s_cl = str(s_row.get(col_class, '')).strip()
+                                        if s_ser and s_ser != str(student_serial).strip():
+                                            serial_entries.append(f"{s_ser}: {s_nm} ({s_cl})")
+                                    students_serial_lookup = " | ".join(serial_entries)
+
+                                with st.spinner("🔄 جاري إتمام التحليل الكامل والتحقق من الرقم التسلسلي..."):
+                                    try:
+                                        prompt_instructions = f"""
+                                        أنت مساعد أستاذ الرياضيات عبد الباسط منصوري بالثانوية التأهيلية المغربية. مهمتك هي **تدقيق تدوين الدرس والتمارين** في دفتر التلميذ(ة): {student_name}
+                                        - الرقم التسلسلي الرسمي للتلميذ(ة) المرسل: {student_serial}
+                                        - رقم مسار: {student_massar}
+                                        - المستوى الدراسي: {student_level}
+                                        - القسم: {st.session_state.user['class']}
+                                        - الدرس المستهدف: {l_name}
                                         
-                                    for idx, row in df_live_reports.iterrows():
-                                        if str(row['massar_clean']) == student_massar.upper():
-                                            continue
-                                        saved_hashes_str = str(row['بصمات_الصور']).strip()
-                                        if saved_hashes_str:
-                                            saved_hashes_list = saved_hashes_str.split(",")
-                                            for current_h in current_hashes:
-                                                if current_h in saved_hashes_list:
-                                                    cheater_detected = True
-                                                    original_student_name = row['الاسم'] if 'الاسم' in row else "تلميذ آخر"
-                                                    break
-                                        if cheater_detected: break
+                                        النص/المخطط المرجعي المعتمد من الأستاذ (المصدر الوحيد للعناوين والفقرات المطلوبة):
+                                        \"\"\"{pdf_reference_text[:15000]}\"\"\"
 
-                                if cheater_detected:
-                                    st.error(
-                                        f"🚨 **نظام كشف الغش والسرقة الرقمية:** \n\n"
-                                        f"عذراً، هذه الصور تم إرسالها مسبقاً من طرف التلميذ(ة): **{original_student_name}**. \n"
-                                        f"لا يمكن لتلميذين إرسال نفس صور الدفتر!"
-                                    )
-                                else:
-                                    with st.spinner("🔄 جاري احتساب النسبة النهائية بدقة وتدقيق إجابات التمارين..."):
-                                        try:
-                                            prompt_instructions = f"""
-                                            أنت مساعد أستاذ الرياضيات عبد الباسط منصوري بالثانوية التأهيلية المغربية. مهمتك هي **تدقيق تدوين الدرس والتمارين** في دفتر التلميذ(ة): {student_name}
-                                            - الرقم التسلسلي الرسمي: {student_serial}
-                                            - رقم مسار: {student_massar}
-                                            - المستوى الدراسي: {student_level}
-                                            - القسم: {st.session_state.user['class']}
-                                            - الدرس المستهدف: {l_name}
-                                            
-                                            النص/المخطط المرجعي المعتمد من الأستاذ (المصدر الوحيد للعناوين والفقرات المطلوبة):
-                                            \"\"\"{pdf_reference_text[:15000]}\"\"\"
+                                        ملاحظات وتوجيهات الأستاذ:
+                                        \"\"\"{saved_note}\"\"\"
 
-                                            ملاحظات وتوجيهات الأستاذ:
-                                            \"\"\"{saved_note}\"\"\"
-                                  
-                                            قواعد التدقيق الصارمة (يجب الالتزام بها حرفياً):
-                                            1. **الالتزام الحصري بمرجع الأستاذ (قاعدة الصندوق المغلق):**
-                                               - يُمنع منعاً باتاً افتراض أو استدعاء أي أنشطة (Activités) أو تمارين إضافية من ذاكرتك الخارجية إذا لم تكن مذكورة في مرجع الأستاذ أعلاه أو غير مكتوبة في دفتر التلميذ.
-                                               - إذا كان مرجع الأستاذ عبارة عن عناوين الفقرات الأساسية للدرس فقط، تحقق من تدوين كل عنوان ومحتواه المناسب، ولا تخصم أي نقطة على تمارين غير موجودة في المرجع.
-                                            2. **التدقيق الدقيق في أسئلة التمارين المكتوبة في الدفتر (عدّ الأسئلة ومطابقتها مع التصحيح):**
-                                               - بالنسبة لكل تمرين (Exercice / Application) مكتوب في دفتر التلميذ(ة) أو في المرجع:
-                                                 * احصر **العدد الإجمالي للأسئلة** الواردة في نص التمرين (مثلاً: سؤالان 1 و 2، أو خمسة أسئلة 1، 2، 3، 4، 5، أو أسئلة فرعية a, b, c).
-                                                 * افحص فقرة **التصحيح/الحل** في دفتر التلميذ(ة) وتأكد هل تم تدوين الإجابة على **جميع الأسئلة** أم على جزء منها فقط!
-                                                 * إذا كان التمرين يتكون من 5 أسئلة مثلاً، وتم تدوين تصحيح سؤالين فقط، نبّه التلميذ(ة) بدقة: ("في التمرين ...: نص التمرين يضم 5 أسئلة، لكن تم نقل تصحيح السؤالين 1 و 2 فقط، وبقيت الأسئلة 3 و 4 و 5 بدون تصحيح")، واخصم النسبة المتبقية من وزن هذا التمرين (مثلاً يُحتسب له 2/5 فقط من نقطة التمرين).
-                                                 * أما إذا تم تدوين تصحيح جميع أسئلة التمرين (مثلاً السؤالين من أصل سؤالين)، فيحصل التمرين على نقطته كاملة.
-                                            3. **لغة تدقيق التدوين فقط:** التلميذ ينقل ما كتبه الأستاذ في السبورة. استخدم عبارات مثل: ("تم تدوين فقرة..."، "تم نقل تصحيح جميع أسئلة التمرين..."، "نقص في نقل تصحيح الأسئلة...").
-                                            4. **طريقة احتساب النسبة المئوية العادلة (من 0% إلى 100%):**
-                                               - وزّع 100% على فقرات وعناوين مرجع الأستاذ والتمارين المدونة.
-                                               - لا تخصم أي نقطة إلا على: (أ) عنوان/فقرة موجودة في مرجع الأستاذ ولم تُكتب في الدفتر، أو (ب) أسئلة ناقصة في تصحيح التمارين المكتوبة، أو (ج) أخطاء واضحة في نسخ المعطيات/الرموز.
-                                            5. **التحقق المتأنّي والعادل من الرقم التسلسلي ({student_serial}):**
-                                               - افحص هوامش جميع الصفحات المرفقة للبحث عن الرقم التسلسلي الرسمي للتلميذ(ة): **{student_serial}**.
-                                               - **قاعدة التثبّت البصري قبل الحكم (مهم جداً):** إذا لاحظت رقماً يبدو للوهلة الأولى قريباً أو مختلفاً قليلاً عن ({student_serial})، **تريّث ولا تتسرع في رفض الملف**؛ قارن شكل الأرقام عبر بقية الصفحات وراعِ طبيعة خط يد التلميذ(ة) وجودة التصوير (فقد يكتب التلميذ الرقم `1` مائلاً فيبدو كأنه `7`، أو `4` مفتوحة فتبدو كأنها `9`، أو `3` متصلة فتبدو كأنها `8`، أو يُقَصّ جزء من الرقم عند حافة الصورة).
-                                               - إذا رجّحت أن الرقم المكتوب هو فعلاً محاولة لكتابة ({student_serial}) بخط يد غير واضح أو تصوير ضعيف، **اقبل الدفتر واحسب نسبة التدوين كاملة**، وأضف في نهاية التقرير سطراً: "تنبيه إداري: خط الرقم التسلسلي ({student_serial}) غير واضح تماماً في بعض الهوامش، يرجى كتابته بخط أوضح وأكبر في المرات القادمة."
-                                               - **حالة الرفض القطعي (0%):** فقط بعد التثبّت التام واليقين الواضح بأن الرقم المكتوب في الهوامش هو رقم تسلسلي مختلف كلياً ولا يمكن أن يكون ({student_serial}) بأي تأويل لخط اليد (يعود بوضوح لتلميذ آخر)، امنح **0%** واذكر الرقم المخالف الذي تم رصده بوضوح. غير واضح في بعض الهوامش، يرجى إبراز كتابته في جميع الصفحات."
-                                            6. **هيكلة التقرير:**
-                                               - **أولاً: الفقرات والتمارين المدونة بشكل سليم**
-                                               - **ثانياً: الملاحظات والنواقص (فقرات ناقصة من المرجع أو أسئلة تمارين لم يُكتب تصحيحها)**
-                                            7. اختم التقرير في آخر سطر حصرياً بدون أي نجمات أو تنسيق عريض بالصيغة الحرفية التالية (مع إجبارية وضع علامة %):
-                                               النسبة النهائية: X%
-                                            """
+                                        مرجع الأرقام التسلسلية لباقي التلاميذ (للتحقق فقط في حال رصد رقم مخالف):
+                                        \"\"\"{students_serial_lookup}\"\"\"
+                              
+                                        قواعد التدقيق الصارمة (يجب الالتزام بها حرفياً):
+                                        1. **الالتزام الحصري بمرجع الأستاذ (قاعدة الصندوق المغلق):**
+                                           - يُمنع منعاً باتاً افتراض أو استدعاء أي أنشطة (Activités) أو تمارين إضافية من ذاكرتك الخارجية إذا لم تكن مذكورة في مرجع الأستاذ أعلاه أو غير مكتوبة في دفتر التلميذ.
+                                           - إذا كان مرجع الأستاذ عبارة عن عناوين الفقرات الأساسية للدرس فقط، تحقق من تدوين كل عنوان ومحتواه المناسب، ولا تخصم أي نقطة على تمارين غير موجودة في المرجع.
+                                        2. **التدقيق الدقيق في أسئلة التمارين المكتوبة في الدفتر (عدّ الأسئلة ومطابقتها مع التصحيح):**
+                                           - بالنسبة لكل تمرين (Exercice / Application) مكتوب في دفتر التلميذ(ة) أو في المرجع:
+                                             * احصر **العدد الإجمالي للأسئلة** الواردة في نص التمرين (مثلاً: سؤالان 1 و 2، أو خمسة أسئلة 1، 2، 3، 4، 5، أو أسئلة فرعية a, b, c).
+                                             * افحص فقرة **التصحيح/الحل** في دفتر التلميذ(ة) وتأكد هل تم تدوين الإجابة على **جميع الأسئلة** أم على جزء منها فقط!
+                                             * إذا كان التمرين يتكون من 5 أسئلة مثلاً، وتم تدوين تصحيح سؤالين فقط، نبّه التلميذ(ة) بدقة: ("في التمرين ...: نص التمرين يضم 5 أسئلة، لكن تم نقل تصحيح السؤالين 1 و 2 فقط، وبقيت الأسئلة 3 و 4 و 5 بدون تصحيح")، واخصم النسبة المتبقية من وزن هذا التمرين (مثلاً يُحتسب له 2/5 فقط من نقطة التمرين).
+                                             * أما إذا تم تدوين تصحيح جميع أسئلة التمرين (مثلاً السؤالين من أصل سؤالين)، فيحصل التمرين على نقطته كاملة.
+                                        3. **لغة تدقيق التدوين فقط:** التلميذ ينقل ما كتبه الأستاذ في السبورة. استخدم عبارات مثل: ("تم تدوين فقرة..."، "تم نقل تصحيح جميع أسئلة التمرين..."، "نقص في نقل تصحيح الأسئلة...").
+                                        4. **إكمال التحليل للنهاية ثم فحص الرقم التسلسلي ({student_serial}) في الفقرة الأخيرة:**
+                                           - **أكمل دائماً التحليل البيداغوجي للدرس والتمارين إلى نهايته** (أولاً: الفقرات والتمارين المدونة، وثانياً: الملاحظات والنواقص) مهما كانت نتيجة فحص الرقم التسلسلي.
+                                           - بعد إتمام التحليل، افحص هوامش الصفحات المرفقة للتحقق من الرقم التسلسلي الرسمي للتلميذ(ة) المرسل: **{student_serial}**.
+                                           - **قاعدة التثبّت البصري قبل الحكم:** راعِ جودة التصوير وطبيعة خط يد التلميذ(ة) (فقد يكتب `1` مائلاً فيبدو كأنه `7`، أو `4` مفتوحة فتبدو كأنها `9`، أو `3` متصلة فتبدو كأنها `8`). إذا كان الرقم المكتوب هو ({student_serial}) أو محاولة واضحة لكتابته بخط يد غير دقيق، اعتمد نسبة التدوين المحسوبة كاملة، وأضف في نهاية التقرير سطراً: "تنبيه إداري: خط الرقم التسلسلي ({student_serial}) غير واضح تماماً في بعض الهوامش، يرجى كتابته بخط أوضح وأكبر."
+                                           - **إيداع حالة الغش في الفقرة الأخيرة من التحليل (عند ثبوت رقم مخالف):** فقط إذا ثبت بوضوح ويقين تام أن الرقم التسلسلي المكتوب في الصفحات لا يطابق ({student_serial}) بل يطابق رقماً تسلسلياً لتلميذ آخر (من اللائحة أعلاه أو رقماً مختلفاً بوضوح)، أضف في **الفقرة الأخيرة من التقرير** فقرة مستقلة بعنوان:
+                                             **ثالثاً: إشعار حالة غش وعدم تطابق الهوية**
+                                             توضح فيها الرقم التسلسلي المخالف الذي تم رصده في الصفحات واسم التلميذ صاحب ذلك الرقم (إن وُجد في اللائحة أعلاه)، وتقرر بناءً عليه إلغاء النسبة ومنح **0%**.
+                                        5. **هيكلة التقرير الإلزامية:**
+                                           - **أولاً: الفقرات والتمارين المدونة بشكل سليم**
+                                           - **ثانياً: الملاحظات والنواقص (فقرات ناقصة من المرجع أو أسئلة تمارين لم يُكتب تصحيحها)**
+                                           - **ثالثاً: إشعار حالة غش وعدم تطابق الهوية** (تُكتب هذه الفقرة الأخيرة فقط إذا ثبت تطابق الرقم التسلسلي في الصفحات مع رقم مخالف غير {student_serial}، وتُجعل النسبة النهائية 0%).
+                                        6. اختم التقرير في آخر سطر حصرياً بدون أي نجمات أو تنسيق عريض بالصيغة الحرفية التالية (مع إجبارية وضع علامة %):
+                                           النسبة النهائية: X%
+                                        """
+                                        
+                                        model = genai.GenerativeModel("gemini-2.5-flash")
+                                        content_payload = [prompt_instructions] + optimized_images
+                                        
+                                        response_success = False
+                                        report_text = ""
+                                        
+                                        for retry_attempt in range(3):
+                                            try:
+                                                res = model.generate_content(
+                                                    content_payload,
+                                                    request_options={"timeout": 120}
+                                                )
+                                                report_text = res.text
+                                                response_success = True
+                                                break
+                                            except Exception as api_err:
+                                                if any(err_code in str(api_err) for err_code in ["429", "504", "ResourceExhausted", "DeadlineExceeded"]):
+                                                    st.warning(f"⚠️ الخادم مشغول، جاري إعادة المحاولة ({retry_attempt + 1}/3)...")
+                                                    time.sleep(10)
+                                                else:
+                                                    raise api_err
+                                        
+                                        if not response_success:
+                                            st.error("🚨 خادم الفحص السحابي ممتلئ أو استغرق وقتاً طويلاً. يرجى المحاولة بعد قليل.")
+                                            st.stop()
                                             
-                                            model = genai.GenerativeModel("gemini-2.5-flash")
-                                            content_payload = [prompt_instructions] + optimized_images
-                                            
-                                            response_success = False
-                                            report_text = ""
-                                            
-                                            for retry_attempt in range(3):
-                                                try:
-                                                    res = model.generate_content(
-                                                        content_payload,
-                                                        request_options={"timeout": 120}
-                                                    )
-                                                    report_text = res.text
-                                                    response_success = True
-                                                    break
-                                                except Exception as api_err:
-                                                    if any(err_code in str(api_err) for err_code in ["429", "504", "ResourceExhausted", "DeadlineExceeded"]):
-                                                        st.warning(f"⚠️ الخادم مشغول، جاري إعادة المحاولة ({retry_attempt + 1}/3)...")
-                                                        time.sleep(10)
-                                                    else:
-                                                        raise api_err
-                                            
-                                            if not response_success:
-                                                st.error("🚨 خادم الفحص السحابي ممتلئ أو استغرق وقتاً طويلاً. يرجى المحاولة بعد قليل.")
-                                                st.stop()
-                                                
-                                            calculated_percentage = extract_percentage_from_report(report_text)
+                                        calculated_percentage = extract_percentage_from_report(report_text)
 
-                                            live_sh.append_row([
-                                                datetime.now().strftime("%Y-%m-%d"),          # A (التاريخ)
-                                                student_massar.upper(),                       # B (رقم مسار)
-                                                student_name,                                 # C (الاسم)
-                                                st.session_state.user['class'],               # D (القسم)
-                                                l_name,                                       # E (الدرس)
-                                                report_text,                                  # F (التقرير)
-                                                hashes_to_save,                               # G (بصمات_الصور)
-                                                calculated_percentage                         # H (النسبة)
-                                            ])
+                                        live_sh.append_row([
+                                            datetime.now().strftime("%Y-%m-%d"),          # A (التاريخ)
+                                            student_massar.upper(),                       # B (رقم مسار)
+                                            student_name,                                 # C (الاسم)
+                                            st.session_state.user['class'],               # D (القسم)
+                                            l_name,                                       # E (الدرس)
+                                            report_text,                                  # F (التقرير)
+                                            hashes_to_save,                               # G (بصمات_الصور)
+                                            calculated_percentage                         # H (النسبة)
+                                        ])
+                                        
+                                        st.cache_data.clear()
+                                        
+                                        if calculated_percentage == "0%":
+                                            st.error("🚨 تم رصد حالة غش / عدم تطابق الرقم التسلسلي في الفقرة الأخيرة من التقرير وتسجيل نسبة 0%!")
+                                        else:
+                                            st.success(f"تم تدقيق التدوين بنجاح! نسبة إنجازك للدرس هي: {calculated_percentage} ✅")
                                             
-                                            st.cache_data.clear()
-                                            
-                                            if calculated_percentage == "0%":
-                                                st.error("🚨 تم رفض الملف وتسجيل نسبة 0% بسبب عدم مطابقة الهوية أو إرسال محتوى خاطئ!")
-                                            else:
-                                                st.success(f"تم تدقيق التدوين بنجاح! نسبة إنجازك للدرس هي: {calculated_percentage} ✅")
-                                                
-                                            st.rerun() 
-                                            
-                                        except Exception as gemini_err:
-                                            st.error(f"❌ حدث خطأ غير متوقع أثناء معالجة الدفتر: {gemini_err}")
+                                        st.rerun() 
+                                        
+                                    except Exception as gemini_err:
+                                        st.error(f"❌ حدث خطأ غير متوقع أثناء معالجة الدفتر: {gemini_err}")
                         else:
                             st.warning("⚠️ المرجو تزويد المنصة بصور الدفتر أولاً.")                        
 
