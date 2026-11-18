@@ -262,14 +262,19 @@ def load_data():
     try:
         lessons_worksheet = sh.worksheet("Lessons")
         lessons_rows = lessons_worksheet.get_all_values()
+        # الهيكلة المعتمدة في الصورة: A=المستوى, B=الدرس, C=رابط_PDF, D=الملاحظات_المرجعية, E=تاريخ_التحديث, F=حالة_التفعيل
+        exact_headers = ["المستوى", "الدرس", "رابط_PDF", "الملاحظات_المرجعية", "تاريخ_التحديث", "حالة_التفعيل"]
         if lessons_rows and len(lessons_rows) > 1:
-            lessons_headers = [h.strip() for h in lessons_rows[0]]
-            df_lessons = pd.DataFrame(lessons_rows[1:], columns=lessons_headers)
+            raw_headers = [h.strip() for h in lessons_rows[0]]
+            while len(raw_headers) < 6:
+                raw_headers.append(exact_headers[len(raw_headers)])
+            padded_rows = [r + [""] * (len(raw_headers) - len(r)) for r in lessons_rows[1:]]
+            df_lessons = pd.DataFrame(padded_rows, columns=raw_headers)
             df_lessons.columns = df_lessons.columns.str.strip()
         else:
-            df_lessons = pd.DataFrame(columns=["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "تاريخ_التحديث", "حالة_التفعيل"])
+            df_lessons = pd.DataFrame(columns=exact_headers)
     except:
-        df_lessons = pd.DataFrame(columns=["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "تاريخ_التحديث", "حالة_التفعيل"])
+        df_lessons = pd.DataFrame(columns=["المستوى", "الدرس", "رابط_PDF", "الملاحظات_المرجعية", "تاريخ_التحديث", "حالة_التفعيل"])
         
     return df_students, df_reports, df_lessons
 
@@ -281,13 +286,20 @@ def get_lesson_details(level_name, lesson_name, df_lessons):
     if not df_lessons.empty and "المستوى" in df_lessons.columns and "الدرس" in df_lessons.columns:
         match_row = df_lessons[(df_lessons["المستوى"].str.strip() == clean_level) & (df_lessons["الدرس"].str.strip() == clean_lesson)]
         if not match_row.empty:
-            note = str(match_row.iloc[0].get("الملاحظات_المرجعية", ""))
-            pdf_link = str(match_row.iloc[0].get("رابط_PDF", ""))
-            status_raw = str(match_row.iloc[0].get("حالة_التفعيل", "مفعل")).strip()
-            is_active = False if status_raw in ["مغلق", "غير مفعل", "معطل", "False", "0"] else True
-            return note, pdf_link, is_active
-    # الافتراضي إذا لم يُضبط بعد هو التفعيل حتى لا يتعطل عمل الدروس القديمة
-    return "", "", True
+            pdf_link = str(match_row.iloc[0].get("رابط_PDF", "")).strip()
+            latex_or_note = str(match_row.iloc[0].get("الملاحظات_المرجعية", "")).strip()
+            status_raw = str(match_row.iloc[0].get("حالة_التفعيل", "")).strip()
+            has_reference = bool(pdf_link or latex_or_note)
+            
+            # لا يُفتح الدرس للتلميذ إلا إذا كان مفعلاً AND يتوفر على مرجع (رابط PDF أو كود LaTeX)
+            if status_raw in ["مغلق", "غير مفعل", "معطل", "False", "0"]:
+                is_active = False
+            elif status_raw == "مفعل":
+                is_active = has_reference
+            else:
+                is_active = has_reference
+            return pdf_link, latex_or_note, is_active, status_raw
+    return "", "", False, "مغلق"
 
 # --- القائمة الجانبية ---
 with st.sidebar:
@@ -325,7 +337,7 @@ def admin_space(df_students, df_reports, df_lessons):
     
     tab1, tab2, tab3, tab4 = st.tabs([
         "📊 لوحة الإحصائيات", 
-        "🚦 تفعيل الدروس وإدارة الروابط", 
+        "🚦 تفعيل الدروس وإدارة المراجع (PDF / LaTeX)", 
         "👥 تتبع السجلات وحالات الغش", 
         "⚙️ الإعدادات"
     ])
@@ -352,126 +364,157 @@ def admin_space(df_students, df_reports, df_lessons):
         st.markdown("<div class='section-title'>🚦 التحكم في تفعيل / إغلاق إرسال الدروس للتلاميذ</div>", unsafe_allow_html=True)
         selected_level = st.selectbox("1️⃣ اختر المستوى الدراسي المستهدف:", ["جذع مشترك علوم", "أولى باكالوريا علوم (1 باك SEF)"], key="ctrl_level_select")
         
-        st.markdown(f"**حدد الدروس المفتوحة للاستقبال حالياً بالنسبة لمستوى ({selected_level}):**")
+        if st.session_state.get("last_synced_level") != selected_level:
+            for idx_l in range(1, 13):
+                l_t = f"الدرس {idx_l}"
+                _, _, act_db, _ = get_lesson_details(selected_level, l_t, df_lessons)
+                st.session_state[f"chk_{selected_level}_{l_t}"] = act_db
+            st.session_state["last_synced_level"] = selected_level
+
+        st.info("💡 لا يُفتح الدرس للتلميذ إلا إذا كان **مفعّلاً (🟢)** **وله مرجع محفوظ** (رابط PDF في العمود C أو كود LaTeX في العمود D). الحفظ هنا يُحدّث العمود F فقط دون المساس بروابطك أو أكواد LaTeX.")
         
-        # أزرار سريعة للتفعيل الجماعي أو الإغلاق الجماعي
         q_col1, q_col2 = st.columns(2)
-        if q_col1.button("✅ تفعيل جميع الدروس (1 إلى 12) لهذا المستوى", use_container_width=True):
+        if q_col1.button("✅ تحديد الكل كمفعّل", use_container_width=True):
             for idx_l in range(1, 13):
                 st.session_state[f"chk_{selected_level}_الدرس {idx_l}"] = True
-        if q_col2.button("🔒 إلغاء تفعيل (إغلاق) جميع الدروس لهذا المستوى", use_container_width=True):
+            st.rerun()
+        if q_col2.button("🔒 إلغاء تفعيل (إغلاق) الكل", use_container_width=True):
             for idx_l in range(1, 13):
                 st.session_state[f"chk_{selected_level}_الدرس {idx_l}"] = False
+            st.rerun()
 
-        # عرض 12 درساً في 3 أعمدة مع مربعات تفعيل واضحة
         cols_grid = st.columns(3)
         lesson_toggles = {}
         for i in range(1, 13):
             l_title = f"الدرس {i}"
-            _, _, current_active = get_lesson_details(selected_level, l_title, df_lessons)
+            pdf_db, latex_db, _, _ = get_lesson_details(selected_level, l_title, df_lessons)
+            has_ref_db = bool(pdf_db or latex_db)
             chk_key = f"chk_{selected_level}_{l_title}"
             if chk_key not in st.session_state:
+                _, _, current_active, _ = get_lesson_details(selected_level, l_title, df_lessons)
                 st.session_state[chk_key] = current_active
             with cols_grid[(i - 1) % 3]:
+                ref_badge = "📄 مرجع محفوظ" if has_ref_db else "⚠️ بدون مرجع"
                 lesson_toggles[l_title] = st.checkbox(
-                    f"{'🟢' if st.session_state[chk_key] else '🔴'} {l_title}",
+                    f"{'🟢' if st.session_state[chk_key] else '🔴'} {l_title} ({ref_badge})",
                     key=chk_key
                 )
         
         if st.button(f"💾 حفظ حالة تفعيل الدروس لمستوى ({selected_level})", use_container_width=True):
-            with st.spinner("جاري حفظ إعدادات تفعيل الدروس في Google Sheets..."):
+            with st.spinner("جاري تحديث العمود F (حالة_التفعيل) دون المساس بالروابط أو أكواد LaTeX..."):
                 try:
                     client = get_gspread_client()
                     sh = client.open("les classes")
                     ws_lessons = sh.worksheet("Lessons")
                     all_vals = ws_lessons.get_all_values()
-                    headers = all_vals[0] if all_vals else ["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "تاريخ_التحديث", "حالة_التفعيل"]
-                    while len(headers) < 6:
-                        headers.append("حالة_التفعيل")
-                    rows = all_vals[1:] if all_vals else []
                     
+                    # التحقق من ترويسة الأعمدة A1:F1 كما في الصورة
+                    if not all_vals:
+                        ws_lessons.update("A1:F1", [["المستوى", "الدرس", "رابط_PDF", "الملاحظات_المرجعية", "تاريخ_التحديث", "حالة_التفعيل"]])
+                        all_vals = ws_lessons.get_all_values()
+                    elif len(all_vals[0]) < 6 or all_vals[0][5].strip() != "حالة_التفعيل":
+                        ws_lessons.update_cell(1, 6, "حالة_التفعيل")
+                        
+                    missing_refs = []
                     for l_title, is_act in lesson_toggles.items():
                         status_str = "مفعل" if is_act else "مغلق"
-                        found = False
-                        for row in rows:
+                        row_idx_found = None
+                        existing_pdf = ""
+                        existing_latex = ""
+                        
+                        for r_idx, row in enumerate(all_vals[1:], start=2):
                             if len(row) >= 2 and row[0].strip() == selected_level.strip() and row[1].strip() == l_title.strip():
-                                while len(row) < 6: row.append("")
-                                row[4] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                                row[5] = status_str
-                                found = True
+                                row_idx_found = r_idx
+                                existing_pdf = row[2].strip() if len(row) > 2 else ""
+                                existing_latex = row[3].strip() if len(row) > 3 else ""
                                 break
-                        if not found:
-                            rows.append([selected_level, l_title, "", "", datetime.now().strftime("%Y-%m-%d %H:%M"), status_str])
+                                
+                        if row_idx_found is not None:
+                            # تحديث العمود F (رقم 6) فقط! الأعمدة C (رابط_PDF) و D (كود LaTeX) و E (تاريخ_التحديث) محفوظة بالكامل
+                            ws_lessons.update_cell(row_idx_found, 6, status_str)
+                            if is_act and not (existing_pdf or existing_latex):
+                                missing_refs.append(l_title)
+                        else:
+                            ws_lessons.append_row([selected_level, l_title, "", "", datetime.now().strftime("%Y-%m-%d %H:%M"), status_str])
+                            if is_act:
+                                missing_refs.append(l_title)
                             
-                    ws_lessons.clear()
-                    ws_lessons.update([headers] + rows)
                     st.cache_data.clear()
-                    st.success(f"✅ تم بنجاح تحديث حالة الإرسال لدروس ({selected_level})!")
-                    time.sleep(1)
+                    if "last_synced_level" in st.session_state:
+                        del st.session_state["last_synced_level"]
+                        
+                    if missing_refs:
+                        st.warning(f"✅ تم الحفظ بأمان! تنبيه: الدروس ({', '.join(missing_refs)}) ستبقى مغلقة عند التلميذ حتى تضع لها رابط PDF أو كود LaTeX المرجعي أسفله.")
+                    else:
+                        st.success(f"✅ تم بنجاح حفظ حالة الإرسال لدروس ({selected_level}) في العمود F مع الحفاظ التام على جميع المراجع!")
+                    time.sleep(1.5)
                     st.rerun()
                 except Exception as toggle_err:
                     st.error(f"حدث خطأ أثناء حفظ حالة التفعيل: {toggle_err}")
 
         st.divider()
-        st.markdown("<div class='section-title'>📂 إدخال وربط روابط الدروس (Google Drive) والمخطط المرجعي</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>📂 إدخال وتعديل المراجع (رابط_PDF / كود LaTeX) للدرس</div>", unsafe_allow_html=True)
         
         lesson_list_options = [f"الدرس {i}" for i in range(1, 13)]
-        selected_lesson_num = st.selectbox("2️⃣ اختر الدرس لتعديل رابطه أو مخططه المرجعي:", lesson_list_options)
+        selected_lesson_num = st.selectbox("2️⃣ اختر الدرس لإدخال أو تعديل مرجعه:", lesson_list_options)
         
-        current_note, current_pdf_link, current_is_active = get_lesson_details(selected_level, selected_lesson_num, df_lessons)
+        current_pdf_link, current_latex, current_is_active, _ = get_lesson_details(selected_level, selected_lesson_num, df_lessons)
         
         st.info(
             f"📋 حالة الدرس في السجل الحالي:\n"
             f"- المستوى: {selected_level}\n"
             f"- الدرس: {selected_lesson_num}\n"
-            f"- حالة الإرسال: {'🟢 مفعل ومفتوح للتلاميذ' if current_is_active else '🔴 مغلق حالياً'}\n"
-            f"- الرابط الحالي: {current_pdf_link if current_pdf_link else 'لا يوجد رابط مدخل بعد'}"
+            f"- حالة الإرسال للتلميذ: {'🟢 مفتوح ويستقبل الإرسالات' if current_is_active else '🔴 مغلق حالياً'}\n"
+            f"- رابط PDF (العمود C): {current_pdf_link if current_pdf_link else 'غير مدخل'}\n"
+            f"- كود LaTeX / الملاحظات (العمود D): {'✅ موجود ومحفوظ' if current_latex else '⚠️ غير مدخل بعد'}"
         )
         
-        input_drive_link = st.text_input("3️⃣ أدخل رابط ملف الـ PDF من Google Drive هنا (اختياري إذا كتبت المخطط أسفله):", value=current_pdf_link).strip()
-        ref_note = st.text_area("4️⃣ أدخل عناوين وفقرات الدرس المرجعية أو توجيهات إضافية للذكاء الاصطناعي:", height=150, value=current_note).strip()
+        input_drive_link = st.text_input("3️⃣ رابط ملف الـ PDF من Google Drive (العمود C - اختياري):", value=current_pdf_link).strip()
+        ref_note = st.text_area("4️⃣ كود LaTeX المرجعي أو عناوين وملاحظات الدرس (العمود D):", height=220, value=current_latex).strip()
 
-        if st.button("💾 حفظ الرابط والمخطط المرجعي في Google Sheets", use_container_width=True):
+        if st.button("💾 حفظ المرجع وتفعيل الدرس في Google Sheets", use_container_width=True):
             if not input_drive_link and not ref_note:
-                st.warning("⚠️ يرجى إدخال رابط PDF أو كتابة عناوين/ملاحظات الدرس المرجعية على الأقل.")
+                st.warning("⚠️ يرجى إدخال رابط PDF أو كود LaTeX المرجعي للدرس أولاً.")
             else:
-                with st.spinner("جاري تحديث جدول Lessons في Google Sheets..."):
+                with st.spinner("جاري حفظ المرجع في الأعمدة C و D وتحديث تاريخ التحديث..."):
                     try:
                         client = get_gspread_client()
                         sh = client.open("les classes")
                         ws_lessons = sh.worksheet("Lessons")
                         all_vals = ws_lessons.get_all_values()
-                        headers = all_vals[0] if all_vals else ["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "تاريخ_التحديث", "حالة_التفعيل"]
-                        while len(headers) < 6:
-                            headers.append("حالة_التفعيل")
-                        rows = all_vals[1:] if all_vals else []
                         
-                        updated = False
-                        for row in rows:
+                        if not all_vals:
+                            ws_lessons.update("A1:F1", [["المستوى", "الدرس", "رابط_PDF", "الملاحظات_المرجعية", "تاريخ_التحديث", "حالة_التفعيل"]])
+                            all_vals = ws_lessons.get_all_values()
+                        elif len(all_vals[0]) < 6 or all_vals[0][5].strip() != "حالة_التفعيل":
+                            ws_lessons.update_cell(1, 6, "حالة_التفعيل")
+                        
+                        row_idx_found = None
+                        for r_idx, row in enumerate(all_vals[1:], start=2):
                             if len(row) >= 2 and row[0].strip() == selected_level.strip() and row[1].strip() == selected_lesson_num.strip():
-                                while len(row) < 6: row.append("")
-                                row[2] = ref_note
-                                row[3] = input_drive_link
-                                row[4] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                                if not row[5]: row[5] = "مفعل"
-                                updated = True
+                                row_idx_found = r_idx
                                 break
-                        if not updated: 
-                            rows.append([selected_level, selected_lesson_num, ref_note, input_drive_link, datetime.now().strftime("%Y-%m-%d %H:%M"), "مفعل"])
+                                
+                        now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+                        if row_idx_found is not None:
+                            # تحديث الأعمدة C:F لهذا الصف فقط دون المساس ببقية الجدول
+                            ws_lessons.update(f"C{row_idx_found}:F{row_idx_found}", [[input_drive_link, ref_note, now_str, "مفعل"]])
+                        else:
+                            ws_lessons.append_row([selected_level, selected_lesson_num, input_drive_link, ref_note, now_str, "مفعل"])
                         
-                        ws_lessons.clear()
-                        ws_lessons.update([headers] + rows)
                         st.cache_data.clear()
-                        st.success(f"🎉 تم بنجاح حفظ المرجع في Google Sheets لـ ({selected_lesson_num} - {selected_level})!")
+                        if "last_synced_level" in st.session_state:
+                            del st.session_state["last_synced_level"]
+                        st.success(f"🎉 تم بنجاح حفظ المرجع وتفعيل ({selected_lesson_num} - {selected_level})!")
+                        time.sleep(1)
+                        st.rerun()
                     except Exception as ex:
                         st.error(f"خطأ أثناء التحديث السحابي: {ex}")
-                    st.rerun()
 
     with tab3:
         st.markdown("<div class='section-title'>👥 تتبع وتقارير التلاميذ (إبراز حالات الغش بلون مميز)</div>", unsafe_allow_html=True)
         if not df_reports.empty:
             df_display = df_reports.copy()
-            # إضافة عمود حالة النزاهة لتسهيل الفرز والتمييز البصري
             df_display.insert(0, "الحالة", df_display.apply(lambda r: "🚨 حالة غش / مخالفة" if is_cheating_row(r) else "✅ سليم", axis=1))
             
             filter_choice = st.radio(
@@ -482,7 +525,6 @@ def admin_space(df_students, df_reports, df_lessons):
             if "حالات الغش" in filter_choice:
                 df_display = df_display[df_display["الحالة"].str.contains("غش")]
             
-            # تلوين صفوف الغش باللون الأحمر المميز داخل الجدول
             def highlight_cheat_rows(row):
                 if "غش" in str(row.get("الحالة", "")):
                     return ['background-color: #fee2e2; color: #991b1b; font-weight: bold'] * len(row)
@@ -558,7 +600,7 @@ def admin_space(df_students, df_reports, df_lessons):
 
     with tab4:
         st.markdown("<div class='section-title'>⚙️ إعدادات الصيانة والأمان</div>", unsafe_allow_html=True)
-        st.info("تم تفعيل إبراز حالات الغش بلون أحمر مميز في لوحة الأستاذ، وتفعيل نظام التحكم في فتح وإغلاق استقبال الدروس حسب المستوى.")
+        st.info("تمت مطابقة هيكلة ورقة Lessons حرفياً مع الأعمدة (A: المستوى، B: الدرس، C: رابط_PDF، D: الملاحظات_المرجعية، E: تاريخ_التحديث، F: حالة_التفعيل).")
 
 # --- واجهة التلميذ ---
 def student_space(df_students, df_reports, df_lessons):
@@ -663,11 +705,10 @@ def student_space(df_students, df_reports, df_lessons):
         else:
             st.info("اختر الدرس المفعّل من التبويبات أسفله لرفع صور دفترك.")
 
-        # تمييز التبويبات المفعلة والمغلقة بصرياً
         tab_labels = []
         for i in range(1, 13):
             l_tmp = f"الدرس {i}"
-            _, _, active_tmp = get_lesson_details(student_level, l_tmp, df_lessons)
+            _, _, active_tmp, _ = get_lesson_details(student_level, l_tmp, df_lessons)
             if l_tmp in submitted_lessons:
                 tab_labels.append(f"✅ {l_tmp}")
             elif active_tmp:
@@ -680,7 +721,7 @@ def student_space(df_students, df_reports, df_lessons):
         for i, tab in enumerate(lesson_tabs):
             with tab:
                 l_name = f"الدرس {i+1}"
-                saved_note, saved_pdf_link, is_lesson_active = get_lesson_details(student_level, l_name, df_lessons)
+                saved_pdf_link, saved_note, is_lesson_active, _ = get_lesson_details(student_level, l_name, df_lessons)
                 
                 if l_name in submitted_lessons:
                     current_p = lesson_percentages.get(l_name, "0%")
@@ -701,15 +742,12 @@ def student_space(df_students, df_reports, df_lessons):
                             """, unsafe_allow_html=True)
                 
                 elif not is_lesson_active:
-                    st.warning(f"🔒 **لم يتم تفعيل الإرسال لهذا الدرس ({l_name})** من طرف الأستاذ عبد الباسط منصوري حالياً. يرجى الالتزام بإرسال الدروس المفعّلة فقط.")
+                    st.error(f"🔒 **لم يتم تفعيل الإرسال لهذا الدرس ({l_name})** من طرف الأستاذ عبد الباسط منصوري حالياً (إما أن الدرس غير مبرمج في هذه الفترة أو لم يُفعّل مرجعه بعد).")
+                    st.info("📌 لا يمكن تحميل أي صور لهذا الدرس إلا بعد تفعيله من طرف الأستاذ. يرجى اختيار درس مفعّل (📚).")
                 
                 else:
                     st.markdown(f"#### 📸 centre de dépôt des cahiers - {l_name} ({student_level})")
-                    
-                    if saved_pdf_link or saved_note:
-                        st.success(f"🔗 تم رصد مرجع الدرس للأستاذ ({student_level})؛ سيتم تدقيق تدوين الفقرات وتصحيح التمارين والتحقق من رقمك التسلسلي.")
-                    else:
-                        st.warning(f"⚠️ تنبيه: لم يقم الأستاذ بإدخال مرجع لهذا الدرس ({student_level}) بعد، سيتم التدقيق بناءً على المقرر الرسمي المغربي.")
+                    st.success(f"🔗 تم رصد مرجع الدرس للأستاذ ({student_level})؛ سيتم تدقيق تدوين الفقرات وتصحيح التمارين والتحقق من رقمك التسلسلي.")
 
                     up_files = st.file_uploader(
                         f"اختر صور صفحات الدفتر لـ {l_name} (🚨 يشترط تحميل 8 صور على الأقل مع كتابة رقمك التسلسلي '{student_serial}' في هوامش جميع الصفحات):", 
@@ -786,10 +824,10 @@ def student_space(df_students, df_reports, df_lessons):
                                         - القسم: {st.session_state.user['class']}
                                         - الدرس المستهدف: {l_name}
                                         
-                                        النص/المخطط المرجعي المعتمد من الأستاذ (المصدر الوحيد للعناوين والفقرات المطلوبة):
+                                        النص المستخرج من ملف الـ PDF المرجعي (إن وُجد):
                                         \"\"\"{pdf_reference_text[:15000]}\"\"\"
 
-                                        ملاحظات وتوجيهات الأستاذ:
+                                        المخطط/كود LaTeX المرجعي المعتمد من الأستاذ (المصدر الوحيد للعناوين والفقرات المطلوبة):
                                         \"\"\"{saved_note}\"\"\"
 
                                         مرجع الأرقام التسلسلية لباقي التلاميذ (للتحقق فقط في حال رصد رقم مخالف):
@@ -798,7 +836,7 @@ def student_space(df_students, df_reports, df_lessons):
                                         قواعد التدقيق الصارمة (يجب الالتزام بها حرفياً):
                                         1. **الالتزام الحصري بمرجع الأستاذ (قاعدة الصندوق المغلق):**
                                            - يُمنع منعاً باتاً افتراض أو استدعاء أي أنشطة (Activités) أو تمارين إضافية من ذاكرتك الخارجية إذا لم تكن مذكورة في مرجع الأستاذ أعلاه أو غير مكتوبة في دفتر التلميذ.
-                                           - إذا كان مرجع الأستاذ عبارة عن عناوين الفقرات الأساسية للدرس فقط، تحقق من تدوين كل عنوان ومحتواه المناسب، ولا تخصم أي نقطة على تمارين غير موجودة في المرجع.
+                                           - إذا كان مرجع الأستاذ عبارة عن عناوين الفقرات الأساسية للدرس (مثل \\section*{{...}} و \\subsection*{{...}}) فقط، تحقق من تدوين كل عنوان ومحتواه المناسب، ولا تخصم أي نقطة على تمارين غير موجودة في المرجع.
                                         2. **التدقيق الدقيق في أسئلة التمارين المكتوبة في الدفتر (عدّ الأسئلة ومطابقتها مع التصحيح):**
                                            - بالنسبة لكل تمرين (Exercice / Application) مكتوب في دفتر التلميذ(ة) أو في المرجع:
                                              * احصر **العدد الإجمالي للأسئلة** الواردة في نص التمرين (مثلاً: سؤالان 1 و 2، أو خمسة أسئلة 1، 2، 3، 4، 5، أو أسئلة فرعية a, b, c).
