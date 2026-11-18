@@ -202,6 +202,14 @@ def extract_percentage_from_report(report_str):
         
     return "0%"
 
+def is_cheating_row(row):
+    rep = str(row.get('التقرير', ''))
+    col_h = str(row.get('بصمة_الخط', '')).strip()
+    pct = extract_percentage_from_report(rep) if rep else col_h
+    if pct == "0%" or col_h == "0%" or "حالة غش" in rep or "عدم تطابق الهوية" in rep:
+        return True
+    return False
+
 def normalize_reports_df(df):
     df.columns = df.columns.str.strip()
     for col in df.columns:
@@ -259,15 +267,15 @@ def load_data():
             df_lessons = pd.DataFrame(lessons_rows[1:], columns=lessons_headers)
             df_lessons.columns = df_lessons.columns.str.strip()
         else:
-            df_lessons = pd.DataFrame(columns=["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "تاريخ_التحديث"])
+            df_lessons = pd.DataFrame(columns=["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "تاريخ_التحديث", "حالة_التفعيل"])
     except:
-        df_lessons = pd.DataFrame(columns=["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "تاريخ_التحديث"])
+        df_lessons = pd.DataFrame(columns=["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "تاريخ_التحديث", "حالة_التفعيل"])
         
     return df_students, df_reports, df_lessons
 
 df_students, df_reports, df_lessons = load_data()
 
-def get_lesson_ref_and_pdf(level_name, lesson_name, df_lessons):
+def get_lesson_details(level_name, lesson_name, df_lessons):
     clean_level = level_name.strip()
     clean_lesson = lesson_name.strip()
     if not df_lessons.empty and "المستوى" in df_lessons.columns and "الدرس" in df_lessons.columns:
@@ -275,8 +283,11 @@ def get_lesson_ref_and_pdf(level_name, lesson_name, df_lessons):
         if not match_row.empty:
             note = str(match_row.iloc[0].get("الملاحظات_المرجعية", ""))
             pdf_link = str(match_row.iloc[0].get("رابط_PDF", ""))
-            return note, pdf_link
-    return "", ""
+            status_raw = str(match_row.iloc[0].get("حالة_التفعيل", "مفعل")).strip()
+            is_active = False if status_raw in ["مغلق", "غير مفعل", "معطل", "False", "0"] else True
+            return note, pdf_link, is_active
+    # الافتراضي إذا لم يُضبط بعد هو التفعيل حتى لا يتعطل عمل الدروس القديمة
+    return "", "", True
 
 # --- القائمة الجانبية ---
 with st.sidebar:
@@ -312,14 +323,24 @@ def admin_space(df_students, df_reports, df_lessons):
         </div>
     """, unsafe_allow_html=True)
     
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 لوحة الإحصائيات", "📂 ربط وإدارة روابط الدروس (Google Drive)", "👥 تتبع سجلات التلاميذ وتصفيرها", "⚙️ الإعدادات"])
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📊 لوحة الإحصائيات", 
+        "🚦 تفعيل الدروس وإدارة الروابط", 
+        "👥 تتبع السجلات وحالات الغش", 
+        "⚙️ الإعدادات"
+    ])
     
     with tab1:
         st.markdown("<div class='section-title'>📈 المؤشرات التربوية العامة</div>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns(3)
+        cheat_count = 0
+        if not df_reports.empty:
+            cheat_count = sum(1 for _, r in df_reports.iterrows() if is_cheating_row(r))
+            
+        col1, col2, col3, col4 = st.columns(4)
         with col1: st.markdown(f"<div class='metric-card'><p style='color:#64748b; font-weight:bold;'>إجمالي التلاميذ</p><h2 style='margin:0; color:#1a365d;'>👥 {len(df_students)}</h2></div>", unsafe_allow_html=True)
         with col2: st.markdown(f"<div class='metric-card'><p style='color:#64748b; font-weight:bold;'>الدفاتر المدققة</p><h2 style='margin:0; color:#1a365d;'>📥 {len(df_reports)}</h2></div>", unsafe_allow_html=True)
-        with col3: 
+        with col3: st.markdown(f"<div class='metric-card' style='border: 2px solid #dc2626 !important; background-color: #fef2f2 !important;'><p style='color:#991b1b; font-weight:bold;'>حالات الغش / المخالفات</p><h2 style='margin:0; color:#dc2626;'>🚨 {cheat_count}</h2></div>", unsafe_allow_html=True)
+        with col4: 
             num_classes = df_students['القسم'].nunique() if not df_students.empty and 'القسم' in df_students.columns else 0
             st.markdown(f"<div class='metric-card'><p style='color:#64748b; font-weight:bold;'>الأقسام</p><h2 style='margin:0; color:#1a365d;'>🏫 {num_classes}</h2></div>", unsafe_allow_html=True)
         
@@ -328,20 +349,89 @@ def admin_space(df_students, df_reports, df_lessons):
             st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
+        st.markdown("<div class='section-title'>🚦 التحكم في تفعيل / إغلاق إرسال الدروس للتلاميذ</div>", unsafe_allow_html=True)
+        selected_level = st.selectbox("1️⃣ اختر المستوى الدراسي المستهدف:", ["جذع مشترك علوم", "أولى باكالوريا علوم (1 باك SEF)"], key="ctrl_level_select")
+        
+        st.markdown(f"**حدد الدروس المفتوحة للاستقبال حالياً بالنسبة لمستوى ({selected_level}):**")
+        
+        # أزرار سريعة للتفعيل الجماعي أو الإغلاق الجماعي
+        q_col1, q_col2 = st.columns(2)
+        if q_col1.button("✅ تفعيل جميع الدروس (1 إلى 12) لهذا المستوى", use_container_width=True):
+            for idx_l in range(1, 13):
+                st.session_state[f"chk_{selected_level}_الدرس {idx_l}"] = True
+        if q_col2.button("🔒 إلغاء تفعيل (إغلاق) جميع الدروس لهذا المستوى", use_container_width=True):
+            for idx_l in range(1, 13):
+                st.session_state[f"chk_{selected_level}_الدرس {idx_l}"] = False
+
+        # عرض 12 درساً في 3 أعمدة مع مربعات تفعيل واضحة
+        cols_grid = st.columns(3)
+        lesson_toggles = {}
+        for i in range(1, 13):
+            l_title = f"الدرس {i}"
+            _, _, current_active = get_lesson_details(selected_level, l_title, df_lessons)
+            chk_key = f"chk_{selected_level}_{l_title}"
+            if chk_key not in st.session_state:
+                st.session_state[chk_key] = current_active
+            with cols_grid[(i - 1) % 3]:
+                lesson_toggles[l_title] = st.checkbox(
+                    f"{'🟢' if st.session_state[chk_key] else '🔴'} {l_title}",
+                    key=chk_key
+                )
+        
+        if st.button(f"💾 حفظ حالة تفعيل الدروس لمستوى ({selected_level})", use_container_width=True):
+            with st.spinner("جاري حفظ إعدادات تفعيل الدروس في Google Sheets..."):
+                try:
+                    client = get_gspread_client()
+                    sh = client.open("les classes")
+                    ws_lessons = sh.worksheet("Lessons")
+                    all_vals = ws_lessons.get_all_values()
+                    headers = all_vals[0] if all_vals else ["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "تاريخ_التحديث", "حالة_التفعيل"]
+                    while len(headers) < 6:
+                        headers.append("حالة_التفعيل")
+                    rows = all_vals[1:] if all_vals else []
+                    
+                    for l_title, is_act in lesson_toggles.items():
+                        status_str = "مفعل" if is_act else "مغلق"
+                        found = False
+                        for row in rows:
+                            if len(row) >= 2 and row[0].strip() == selected_level.strip() and row[1].strip() == l_title.strip():
+                                while len(row) < 6: row.append("")
+                                row[4] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                                row[5] = status_str
+                                found = True
+                                break
+                        if not found:
+                            rows.append([selected_level, l_title, "", "", datetime.now().strftime("%Y-%m-%d %H:%M"), status_str])
+                            
+                    ws_lessons.clear()
+                    ws_lessons.update([headers] + rows)
+                    st.cache_data.clear()
+                    st.success(f"✅ تم بنجاح تحديث حالة الإرسال لدروس ({selected_level})!")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as toggle_err:
+                    st.error(f"حدث خطأ أثناء حفظ حالة التفعيل: {toggle_err}")
+
+        st.divider()
         st.markdown("<div class='section-title'>📂 إدخال وربط روابط الدروس (Google Drive) والمخطط المرجعي</div>", unsafe_allow_html=True)
         
-        selected_level = st.selectbox("1️⃣ اختر المستوى الدراسي:", ["جذع مشترك علوم", "أولى باكالوريا علوم (1 باك SEF)"])
         lesson_list_options = [f"الدرس {i}" for i in range(1, 13)]
-        selected_lesson_num = st.selectbox("2️⃣ اختر الدرس المستهدف:", lesson_list_options)
+        selected_lesson_num = st.selectbox("2️⃣ اختر الدرس لتعديل رابطه أو مخططه المرجعي:", lesson_list_options)
         
-        current_note, current_pdf_link = get_lesson_ref_and_pdf(selected_level, selected_lesson_num, df_lessons)
+        current_note, current_pdf_link, current_is_active = get_lesson_details(selected_level, selected_lesson_num, df_lessons)
         
-        st.info(f"📋 حالة الدرس في السجل الحالي:\n- المستوى: {selected_level}\n- الدرس: {selected_lesson_num}\n- الرابط الحالي: {current_pdf_link if current_pdf_link else 'لا يوجد رابط مدخل بعد'}")
+        st.info(
+            f"📋 حالة الدرس في السجل الحالي:\n"
+            f"- المستوى: {selected_level}\n"
+            f"- الدرس: {selected_lesson_num}\n"
+            f"- حالة الإرسال: {'🟢 مفعل ومفتوح للتلاميذ' if current_is_active else '🔴 مغلق حالياً'}\n"
+            f"- الرابط الحالي: {current_pdf_link if current_pdf_link else 'لا يوجد رابط مدخل بعد'}"
+        )
         
         input_drive_link = st.text_input("3️⃣ أدخل رابط ملف الـ PDF من Google Drive هنا (اختياري إذا كتبت المخطط أسفله):", value=current_pdf_link).strip()
         ref_note = st.text_area("4️⃣ أدخل عناوين وفقرات الدرس المرجعية أو توجيهات إضافية للذكاء الاصطناعي:", height=150, value=current_note).strip()
 
-        if st.button("💾 حفظ وتحديث السجل في Google Sheets", use_container_width=True):
+        if st.button("💾 حفظ الرابط والمخطط المرجعي في Google Sheets", use_container_width=True):
             if not input_drive_link and not ref_note:
                 st.warning("⚠️ يرجى إدخال رابط PDF أو كتابة عناوين/ملاحظات الدرس المرجعية على الأقل.")
             else:
@@ -351,20 +441,23 @@ def admin_space(df_students, df_reports, df_lessons):
                         sh = client.open("les classes")
                         ws_lessons = sh.worksheet("Lessons")
                         all_vals = ws_lessons.get_all_values()
-                        headers = all_vals[0] if all_vals else ["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "تاريخ_التحديث"]
+                        headers = all_vals[0] if all_vals else ["المستوى", "الدرس", "الملاحظات_المرجعية", "رابط_PDF", "تاريخ_التحديث", "حالة_التفعيل"]
+                        while len(headers) < 6:
+                            headers.append("حالة_التفعيل")
                         rows = all_vals[1:] if all_vals else []
                         
                         updated = False
                         for row in rows:
                             if len(row) >= 2 and row[0].strip() == selected_level.strip() and row[1].strip() == selected_lesson_num.strip():
-                                while len(row) < 5: row.append("")
+                                while len(row) < 6: row.append("")
                                 row[2] = ref_note
                                 row[3] = input_drive_link
                                 row[4] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                                if not row[5]: row[5] = "مفعل"
                                 updated = True
                                 break
                         if not updated: 
-                            rows.append([selected_level, selected_lesson_num, ref_note, input_drive_link, datetime.now().strftime("%Y-%m-%d %H:%M")])
+                            rows.append([selected_level, selected_lesson_num, ref_note, input_drive_link, datetime.now().strftime("%Y-%m-%d %H:%M"), "مفعل"])
                         
                         ws_lessons.clear()
                         ws_lessons.update([headers] + rows)
@@ -375,9 +468,28 @@ def admin_space(df_students, df_reports, df_lessons):
                     st.rerun()
 
     with tab3:
-        st.markdown("<div class='section-title'>👥 تتبع وتقارير التلاميذ الحالية</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>👥 تتبع وتقارير التلاميذ (إبراز حالات الغش بلون مميز)</div>", unsafe_allow_html=True)
         if not df_reports.empty:
-            st.dataframe(df_reports, use_container_width=True)
+            df_display = df_reports.copy()
+            # إضافة عمود حالة النزاهة لتسهيل الفرز والتمييز البصري
+            df_display.insert(0, "الحالة", df_display.apply(lambda r: "🚨 حالة غش / مخالفة" if is_cheating_row(r) else "✅ سليم", axis=1))
+            
+            filter_choice = st.radio(
+                "تصفية السجلات:", 
+                ["عرض جميع السجلات", "🚨 عرض حالات الغش والمخالفات فقط (0%)"], 
+                horizontal=True
+            )
+            if "حالات الغش" in filter_choice:
+                df_display = df_display[df_display["الحالة"].str.contains("غش")]
+            
+            # تلوين صفوف الغش باللون الأحمر المميز داخل الجدول
+            def highlight_cheat_rows(row):
+                if "غش" in str(row.get("الحالة", "")):
+                    return ['background-color: #fee2e2; color: #991b1b; font-weight: bold'] * len(row)
+                return [''] * len(row)
+                
+            styled_df = df_display.style.apply(highlight_cheat_rows, axis=1)
+            st.dataframe(styled_df, use_container_width=True)
         else:
             st.info("لا توجد تقارير مرسلة حالياً.")
             
@@ -396,7 +508,8 @@ def admin_space(df_students, df_reports, df_lessons):
                 for idx, r in df_filtered_class.iterrows():
                     m_id = str(r.get('رقم مسار', '')).strip().upper()
                     s_name = str(r.get('الاسم', '')).strip()
-                    display_text = f"👤 {s_name} (مسار: {m_id})"
+                    cheat_tag = " 🚨 [غش]" if is_cheating_row(r) else ""
+                    display_text = f"👤 {s_name} (مسار: {m_id}){cheat_tag}"
                     if display_text not in student_options:
                         student_options.append(display_text)
                         student_mapping[display_text] = m_id
@@ -445,7 +558,7 @@ def admin_space(df_students, df_reports, df_lessons):
 
     with tab4:
         st.markdown("<div class='section-title'>⚙️ إعدادات الصيانة والأمان</div>", unsafe_allow_html=True)
-        st.info("تم ضبط النظام لإتمام التحليل الكامل للدفتر دائماً، مع إيداع إشعار حالة الغش وتطابق الرقم التسلسلي في الفقرة الأخيرة من التقرير ومنح 0% عند ثبوت المخالفة.")
+        st.info("تم تفعيل إبراز حالات الغش بلون أحمر مميز في لوحة الأستاذ، وتفعيل نظام التحكم في فتح وإغلاق استقبال الدروس حسب المستوى.")
 
 # --- واجهة التلميذ ---
 def student_space(df_students, df_reports, df_lessons):
@@ -548,13 +661,26 @@ def student_space(df_students, df_reports, df_lessons):
                         status_text += f"✅ نسبة تدوينك وإنجازك لـ <b>{l_sub}</b> هي: <span style='color:#ffffff; background:#1e3a8a; padding:2px 10px; border-radius:5px;'><b>{pct}</b></span><br>"
             st.markdown(f"<div class='status-box'>{status_text}</div>", unsafe_allow_html=True)
         else:
-            st.warning("لم تقم بإرسال أي دروس بعد. المرجو اختيار الدرس من التبويبات أسفله ورفع 8 صور على الأقل.")
+            st.info("اختر الدرس المفعّل من التبويبات أسفله لرفع صور دفترك.")
 
-        lesson_tabs = st.tabs([f"📚 الدرس {i}" for i in range(1, 13)])
+        # تمييز التبويبات المفعلة والمغلقة بصرياً
+        tab_labels = []
+        for i in range(1, 13):
+            l_tmp = f"الدرس {i}"
+            _, _, active_tmp = get_lesson_details(student_level, l_tmp, df_lessons)
+            if l_tmp in submitted_lessons:
+                tab_labels.append(f"✅ {l_tmp}")
+            elif active_tmp:
+                tab_labels.append(f"📚 {l_tmp}")
+            else:
+                tab_labels.append(f"🔒 {l_tmp}")
+
+        lesson_tabs = st.tabs(tab_labels)
         
         for i, tab in enumerate(lesson_tabs):
             with tab:
                 l_name = f"الدرس {i+1}"
+                saved_note, saved_pdf_link, is_lesson_active = get_lesson_details(student_level, l_name, df_lessons)
                 
                 if l_name in submitted_lessons:
                     current_p = lesson_percentages.get(l_name, "0%")
@@ -574,9 +700,11 @@ def student_space(df_students, df_reports, df_lessons):
                             </div>
                             """, unsafe_allow_html=True)
                 
+                elif not is_lesson_active:
+                    st.warning(f"🔒 **لم يتم تفعيل الإرسال لهذا الدرس ({l_name})** من طرف الأستاذ عبد الباسط منصوري حالياً. يرجى الالتزام بإرسال الدروس المفعّلة فقط.")
+                
                 else:
                     st.markdown(f"#### 📸 centre de dépôt des cahiers - {l_name} ({student_level})")
-                    saved_note, saved_pdf_link = get_lesson_ref_and_pdf(student_level, l_name, df_lessons)
                     
                     if saved_pdf_link or saved_note:
                         st.success(f"🔗 تم رصد مرجع الدرس للأستاذ ({student_level})؛ سيتم تدقيق تدوين الفقرات وتصحيح التمارين والتحقق من رقمك التسلسلي.")
@@ -637,7 +765,6 @@ def student_space(df_students, df_reports, df_lessons):
                                         st.cache_data.clear()
                                         st.rerun()
 
-                                # تجميع لائحة التلاميذ وأرقامهم التسلسلية المسجلة لمساعدة الذكاء الاصطناعي على كشف صاحب الدفتر الأصلي في حال التطابق
                                 students_serial_lookup = ""
                                 if not df_students.empty and col_serial in df_students.columns and col_name in df_students.columns:
                                     serial_entries = []
