@@ -262,7 +262,7 @@ def load_data():
     try:
         lessons_worksheet = sh.worksheet("Lessons")
         lessons_rows = lessons_worksheet.get_all_values()
-        # الهيكلة المعتمدة في الصورة: A=المستوى, B=الدرس, C=رابط_PDF, D=الملاحظات_المرجعية, E=تاريخ_التحديث, F=حالة_التفعيل
+        # الهيكلة المعتمدة: A=المستوى, B=الدرس, C=رابط_PDF, D=الملاحظات_المرجعية, E=تاريخ_التحديث, F=حالة_التفعيل
         exact_headers = ["المستوى", "الدرس", "رابط_PDF", "الملاحظات_المرجعية", "تاريخ_التحديث", "حالة_التفعيل"]
         if lessons_rows and len(lessons_rows) > 1:
             raw_headers = [h.strip() for h in lessons_rows[0]]
@@ -291,7 +291,6 @@ def get_lesson_details(level_name, lesson_name, df_lessons):
             status_raw = str(match_row.iloc[0].get("حالة_التفعيل", "")).strip()
             has_reference = bool(pdf_link or latex_or_note)
             
-            # لا يُفتح الدرس للتلميذ إلا إذا كان مفعلاً AND يتوفر على مرجع (رابط PDF أو كود LaTeX)
             if status_raw in ["مغلق", "غير مفعل", "معطل", "False", "0"]:
                 is_active = False
             elif status_raw == "مفعل":
@@ -335,8 +334,9 @@ def admin_space(df_students, df_reports, df_lessons):
         </div>
     """, unsafe_allow_html=True)
     
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab_classes, tab2, tab3, tab4 = st.tabs([
         "📊 لوحة الإحصائيات", 
+        "📋 تتبع التلاميذ حسب القسم", 
         "🚦 تفعيل الدروس وإدارة المراجع (PDF / LaTeX)", 
         "👥 تتبع السجلات وحالات الغش", 
         "⚙️ الإعدادات"
@@ -359,6 +359,196 @@ def admin_space(df_students, df_reports, df_lessons):
         if not df_reports.empty and 'القسم' in df_reports.columns:
             fig = px.bar(df_reports.groupby('القسم').size().reset_index(name='عدد الإرسالات'), x='القسم', y='عدد الإرسالات', title="📊 تفاعل الأقسام والالتزام بالدفاتر الرقمية", color_discrete_sequence=['#1a365d'])
             st.plotly_chart(fig, use_container_width=True)
+
+    # --- التبويب الجديد: تتبع جميع تلاميذ كل قسم وحالة إرسال الدروس المفعّلة ---
+    with tab_classes:
+        st.markdown("<div class='section-title'>🏫 التتبع الشامل لتلاميذ كل قسم وحالة إرسال الدروس</div>", unsafe_allow_html=True)
+        if df_students.empty or 'القسم' not in df_students.columns:
+            st.warning("⚠️ لا توجد بيانات للتلاميذ في ورقة التلاميذ حالياً.")
+        else:
+            all_classes_list = sorted([c for c in df_students['القسم'].astype(str).str.strip().unique().tolist() if c and c != "nan"])
+            if not all_classes_list:
+                st.warning("⚠️ لم يتم العثور على أقسام مسجلة.")
+            else:
+                if "selected_track_class" not in st.session_state or st.session_state["selected_track_class"] not in all_classes_list:
+                    st.session_state["selected_track_class"] = all_classes_list[0]
+                
+                st.markdown("**1️⃣ اضغط على القسم لعرض لائحة تلاميذه وإحصائيات الإرسال:**")
+                btn_cols = st.columns(len(all_classes_list))
+                for idx_c, cls_name in enumerate(all_classes_list):
+                    is_selected = (st.session_state["selected_track_class"] == cls_name)
+                    btn_label = f"📍 {cls_name}" if is_selected else f"🏫 {cls_name}"
+                    if btn_cols[idx_c].button(btn_label, key=f"cls_btn_{cls_name}", use_container_width=True):
+                        st.session_state["selected_track_class"] = cls_name
+                        st.rerun()
+                
+                chosen_cls = st.session_state["selected_track_class"]
+                df_cls_students = df_students[df_students['القسم'].astype(str).str.strip() == chosen_cls].copy()
+                
+                # ترتيب التلاميذ حسب الرقم التسلسلي تصاعدياً إن وُجد
+                if 'الرقم التسلسلي' in df_cls_students.columns:
+                    df_cls_students['_ser_num'] = pd.to_numeric(df_cls_students['الرقم التسلسلي'], errors='coerce').fillna(9999)
+                    df_cls_students = df_cls_students.sort_values(by='_ser_num')
+                
+                sample_lvl = str(df_cls_students.iloc[0].get('المستوى', '')).strip() if (not df_cls_students.empty and 'المستوى' in df_cls_students.columns) else ""
+                cls_level = detect_level_from_class(chosen_cls, sample_lvl)
+                
+                # تحديد الدروس المفعّلة حالياً لهذا المستوى (مثلاً الدرس 1 والدرس 2)
+                active_lessons_for_cls = []
+                for idx_l in range(1, 13):
+                    l_name_tmp = f"الدرس {idx_l}"
+                    _, _, is_act_tmp, _ = get_lesson_details(cls_level, l_name_tmp, df_lessons)
+                    if is_act_tmp:
+                        active_lessons_for_cls.append(l_name_tmp)
+                
+                # في حال لم يكن هناك درس مفعل بعد، نعتمد الدرس 1 والدرس 2 كحد أدنى للعرض
+                tracked_lessons = active_lessons_for_cls if active_lessons_for_cls else ["الدرس 1", "الدرس 2"]
+                
+                st.markdown(f"### 📋 لائحة تلاميذ قسم: **{chosen_cls}** ({cls_level})")
+                
+                # تجهيز قاموس الإرسالات من ورقة Reports
+                submissions_map = {}
+                if not df_reports.empty and 'رقم مسار' in df_reports.columns and 'الدرس' in df_reports.columns:
+                    for _, rep_r in df_reports.iterrows():
+                        m_key = str(rep_r.get('رقم مسار', '')).strip().upper()
+                        l_key = str(rep_r.get('الدرس', '')).strip()
+                        rep_txt = str(rep_r.get('التقرير', ''))
+                        col_h = str(rep_r.get('بصمة_الخط', '')).strip()
+                        pct_val = extract_percentage_from_report(rep_txt) if rep_txt else (col_h if "%" in col_h else "0%")
+                        cheat_flag = is_cheating_row(rep_r)
+                        submissions_map[(m_key, l_key)] = (pct_val, cheat_flag)
+                
+                total_students_cls = len(df_cls_students)
+                lesson_sent_counts = {l: 0 for l in tracked_lessons}
+                both_or_all_count = 0
+                partial_count = 0
+                none_count = 0
+                
+                table_rows = []
+                for _, st_r in df_cls_students.iterrows():
+                    st_massar = str(st_r.get('رقم التلميذ', '')).strip().upper()
+                    st_serial = str(st_r.get('الرقم التسلسلي', '')).strip()
+                    st_name = str(st_r.get('اسم التلميذ', '')).strip()
+                    
+                    row_dict = {
+                        "الرقم التسلسلي": st_serial,
+                        "رقم مسار": st_massar,
+                        "اسم التلميذ": st_name,
+                    }
+                    
+                    sent_for_this_student = 0
+                    for l_tr in tracked_lessons:
+                        if (st_massar, l_tr) in submissions_map:
+                            pct_v, is_ch = submissions_map[(st_massar, l_tr)]
+                            lesson_sent_counts[l_tr] += 1
+                            sent_for_this_student += 1
+                            if is_ch:
+                                row_dict[f"أرسل {l_tr}"] = "🚨 نعم (غش 0%)"
+                            else:
+                                row_dict[f"أرسل {l_tr}"] = f"✅ نعم ({pct_v})"
+                        else:
+                            row_dict[f"أرسل {l_tr}"] = "❌ لا"
+                    
+                    if sent_for_this_student == len(tracked_lessons):
+                        both_or_all_count += 1
+                        row_dict["ملخص الحالة"] = "🟢 أرسل جميع الدروس المفعّلة"
+                    elif sent_for_this_student > 0:
+                        partial_count += 1
+                        row_dict["ملخص الحالة"] = f"🟡 أرسل {sent_for_this_student} من {len(tracked_lessons)} فقط"
+                    else:
+                        none_count += 1
+                        row_dict["ملخص الحالة"] = "🔴 لم يرسل أي درس"
+                        
+                    table_rows.append(row_dict)
+                
+                # بطاقات الإحصائيات ونسب الإرسال لكل درس داخل القسم
+                st.markdown("#### 📊 نسب الإرسال وتوزيع التلاميذ في هذا القسم:")
+                stat_cols = st.columns(len(tracked_lessons) + 3)
+                
+                for idx_l, l_tr in enumerate(tracked_lessons):
+                    cnt_l = lesson_sent_counts[l_tr]
+                    rate_l = round((cnt_l / total_students_cls) * 100, 1) if total_students_cls > 0 else 0.0
+                    with stat_cols[idx_l]:
+                        st.markdown(
+                            f"<div class='metric-card' style='padding:12px; text-align:center;'>"
+                            f"<p style='color:#64748b; margin:0; font-size:0.95rem;'>نسبة إرسال {l_tr}</p>"
+                            f"<h3 style='color:#1e3a8a; margin:4px 0;'>{rate_l}%</h3>"
+                            f"<small style='color:#475569;'>({cnt_l} من {total_students_cls} تلميذ)</small>"
+                            f"</div>", unsafe_allow_html=True
+                        )
+                
+                with stat_cols[len(tracked_lessons)]:
+                    st.markdown(
+                        f"<div class='metric-card' style='padding:12px; text-align:center; border-color:#10b981 !important;'>"
+                        f"<p style='color:#065f46; margin:0; font-size:0.95rem;'>أرسلوا الكل (نعم/نعم)</p>"
+                        f"<h3 style='color:#059669; margin:4px 0;'>🟢 {both_or_all_count}</h3>"
+                        f"<small style='color:#475569;'>تلميذ(ة)</small>"
+                        f"</div>", unsafe_allow_html=True
+                    )
+                with stat_cols[len(tracked_lessons) + 1]:
+                    st.markdown(
+                        f"<div class='metric-card' style='padding:12px; text-align:center; border-color:#f59e0b !important;'>"
+                        f"<p style='color:#92400e; margin:0; font-size:0.95rem;'>أرسلوا درساً واحداً فقط</p>"
+                        f"<h3 style='color:#d97706; margin:4px 0;'>🟡 {partial_count}</h3>"
+                        f"<small style='color:#475569;'>تلميذ(ة)</small>"
+                        f"</div>", unsafe_allow_html=True
+                    )
+                with stat_cols[len(tracked_lessons) + 2]:
+                    st.markdown(
+                        f"<div class='metric-card' style='padding:12px; text-align:center; border-color:#ef4444 !important;'>"
+                        f"<p style='color:#991b1b; margin:0; font-size:0.95rem;'>لم يرسلوا شيئاً (لا/لا)</p>"
+                        f"<h3 style='color:#dc2626; margin:4px 0;'>🔴 {none_count}</h3>"
+                        f"<small style='color:#475569;'>تلميذ(ة)</small>"
+                        f"</div>", unsafe_allow_html=True
+                    )
+                
+                st.write("")
+                df_class_tracking = pd.DataFrame(table_rows)
+                
+                # خيارات تصفية سريعة داخل القسم
+                status_filter = st.radio(
+                    "تصفية تلاميذ القسم:",
+                    [
+                        f"الجميع ({total_students_cls})",
+                        f"🟢 أرسلوا جميع الدروس ({both_or_all_count})",
+                        f"🟡 أرسلوا درساً واحداً فقط ({partial_count})",
+                        f"🔴 لم يرسلوا أي درس ({none_count})"
+                    ],
+                    horizontal=True,
+                    key=f"filter_radio_{chosen_cls}"
+                )
+                
+                df_filtered_view = df_class_tracking.copy()
+                if "أرسلوا جميع الدروس" in status_filter:
+                    df_filtered_view = df_filtered_view[df_filtered_view["ملخص الحالة"].str.contains("🟢")]
+                elif "درساً واحداً فقط" in status_filter:
+                    df_filtered_view = df_filtered_view[df_filtered_view["ملخص الحالة"].str.contains("🟡")]
+                elif "لم يرسلوا أي درس" in status_filter:
+                    df_filtered_view = df_filtered_view[df_filtered_view["ملخص الحالة"].str.contains("🔴")]
+                
+                def style_tracking_table(row):
+                    summary = str(row.get("ملخص الحالة", ""))
+                    if "🟢" in summary:
+                        return ['background-color: #ecfdf5; color: #065f46'] * len(row)
+                    elif "🟡" in summary:
+                        return ['background-color: #fffbeb; color: #92400e'] * len(row)
+                    elif "🔴" in summary:
+                        return ['background-color: #fef2f2; color: #991b1b'] * len(row)
+                    return [''] * len(row)
+                
+                st.dataframe(
+                    df_filtered_view.style.apply(style_tracking_table, axis=1),
+                    use_container_width=True,
+                    hide_index=True
+                )
+                
+                csv_export = df_class_tracking.to_csv(index=False).encode('utf-8-sig')
+                st.download_button(
+                    label=f"📥 تحميل لائحة تتبع قسم {chosen_cls} (Excel / CSV)",
+                    data=csv_export,
+                    file_name=f"تتبع_قسم_{chosen_cls}_{datetime.now().strftime('%Y-%m-%d')}.csv",
+                    mime="text/csv"
+                )
 
     with tab2:
         st.markdown("<div class='section-title'>🚦 التحكم في تفعيل / إغلاق إرسال الدروس للتلاميذ</div>", unsafe_allow_html=True)
@@ -408,7 +598,6 @@ def admin_space(df_students, df_reports, df_lessons):
                     ws_lessons = sh.worksheet("Lessons")
                     all_vals = ws_lessons.get_all_values()
                     
-                    # التحقق من ترويسة الأعمدة A1:F1 كما في الصورة
                     if not all_vals:
                         ws_lessons.update("A1:F1", [["المستوى", "الدرس", "رابط_PDF", "الملاحظات_المرجعية", "تاريخ_التحديث", "حالة_التفعيل"]])
                         all_vals = ws_lessons.get_all_values()
@@ -430,7 +619,6 @@ def admin_space(df_students, df_reports, df_lessons):
                                 break
                                 
                         if row_idx_found is not None:
-                            # تحديث العمود F (رقم 6) فقط! الأعمدة C (رابط_PDF) و D (كود LaTeX) و E (تاريخ_التحديث) محفوظة بالكامل
                             ws_lessons.update_cell(row_idx_found, 6, status_str)
                             if is_act and not (existing_pdf or existing_latex):
                                 missing_refs.append(l_title)
@@ -497,7 +685,6 @@ def admin_space(df_students, df_reports, df_lessons):
                                 
                         now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
                         if row_idx_found is not None:
-                            # تحديث الأعمدة C:F لهذا الصف فقط دون المساس ببقية الجدول
                             ws_lessons.update(f"C{row_idx_found}:F{row_idx_found}", [[input_drive_link, ref_note, now_str, "مفعل"]])
                         else:
                             ws_lessons.append_row([selected_level, selected_lesson_num, input_drive_link, ref_note, now_str, "مفعل"])
@@ -600,7 +787,7 @@ def admin_space(df_students, df_reports, df_lessons):
 
     with tab4:
         st.markdown("<div class='section-title'>⚙️ إعدادات الصيانة والأمان</div>", unsafe_allow_html=True)
-        st.info("تمت مطابقة هيكلة ورقة Lessons حرفياً مع الأعمدة (A: المستوى، B: الدرس، C: رابط_PDF، D: الملاحظات_المرجعية، E: تاريخ_التحديث، F: حالة_التفعيل).")
+        st.info("تمت إضافة تبويب تتبع التلاميذ حسب القسم لعرض حالة إرسال الدروس المفعّلة (نعم/لا) ونسب الإرسال لكل درس.")
 
 # --- واجهة التلميذ ---
 def student_space(df_students, df_reports, df_lessons):
