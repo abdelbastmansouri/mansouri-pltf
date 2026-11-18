@@ -107,10 +107,18 @@ def get_custom_bg():
 
 st.markdown(get_custom_bg(), unsafe_allow_html=True)
 
-try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-except Exception as e:
-    st.error("⚠️ لم يتم العثور على مفتاح 'GEMINI_API_KEY'.")
+def get_all_api_keys():
+    keys = []
+    if "GEMINI_API_KEYS" in st.secrets:
+        keys.extend([str(k).strip() for k in st.secrets["GEMINI_API_KEYS"] if str(k).strip()])
+    if "GEMINI_API_KEY" in st.secrets:
+        single_k = str(st.secrets["GEMINI_API_KEY"]).strip()
+        if single_k and single_k not in keys:
+            keys.append(single_k)
+    return keys
+
+if not get_all_api_keys():
+    st.error("⚠️ لم يتم العثور على أي مفتاح API في Secrets (GEMINI_API_KEYS أو GEMINI_API_KEY).")
 
 if 'auth' not in st.session_state: st.session_state.auth = False
 if 'user' not in st.session_state: st.session_state.user = {}
@@ -262,7 +270,6 @@ def load_data():
     try:
         lessons_worksheet = sh.worksheet("Lessons")
         lessons_rows = lessons_worksheet.get_all_values()
-        # الهيكلة المعتمدة: A=المستوى, B=الدرس, C=رابط_PDF, D=الملاحظات_المرجعية, E=تاريخ_التحديث, F=حالة_التفعيل
         exact_headers = ["المستوى", "الدرس", "رابط_PDF", "الملاحظات_المرجعية", "تاريخ_التحديث", "حالة_التفعيل"]
         if lessons_rows and len(lessons_rows) > 1:
             raw_headers = [h.strip() for h in lessons_rows[0]]
@@ -360,7 +367,6 @@ def admin_space(df_students, df_reports, df_lessons):
             fig = px.bar(df_reports.groupby('القسم').size().reset_index(name='عدد الإرسالات'), x='القسم', y='عدد الإرسالات', title="📊 تفاعل الأقسام والالتزام بالدفاتر الرقمية", color_discrete_sequence=['#1a365d'])
             st.plotly_chart(fig, use_container_width=True)
 
-    # --- التبويب الجديد: تتبع جميع تلاميذ كل قسم وحالة إرسال الدروس المفعّلة ---
     with tab_classes:
         st.markdown("<div class='section-title'>🏫 التتبع الشامل لتلاميذ كل قسم وحالة إرسال الدروس</div>", unsafe_allow_html=True)
         if df_students.empty or 'القسم' not in df_students.columns:
@@ -385,7 +391,6 @@ def admin_space(df_students, df_reports, df_lessons):
                 chosen_cls = st.session_state["selected_track_class"]
                 df_cls_students = df_students[df_students['القسم'].astype(str).str.strip() == chosen_cls].copy()
                 
-                # ترتيب التلاميذ حسب الرقم التسلسلي تصاعدياً إن وُجد
                 if 'الرقم التسلسلي' in df_cls_students.columns:
                     df_cls_students['_ser_num'] = pd.to_numeric(df_cls_students['الرقم التسلسلي'], errors='coerce').fillna(9999)
                     df_cls_students = df_cls_students.sort_values(by='_ser_num')
@@ -393,7 +398,6 @@ def admin_space(df_students, df_reports, df_lessons):
                 sample_lvl = str(df_cls_students.iloc[0].get('المستوى', '')).strip() if (not df_cls_students.empty and 'المستوى' in df_cls_students.columns) else ""
                 cls_level = detect_level_from_class(chosen_cls, sample_lvl)
                 
-                # تحديد الدروس المفعّلة حالياً لهذا المستوى (مثلاً الدرس 1 والدرس 2)
                 active_lessons_for_cls = []
                 for idx_l in range(1, 13):
                     l_name_tmp = f"الدرس {idx_l}"
@@ -401,12 +405,10 @@ def admin_space(df_students, df_reports, df_lessons):
                     if is_act_tmp:
                         active_lessons_for_cls.append(l_name_tmp)
                 
-                # في حال لم يكن هناك درس مفعل بعد، نعتمد الدرس 1 والدرس 2 كحد أدنى للعرض
                 tracked_lessons = active_lessons_for_cls if active_lessons_for_cls else ["الدرس 1", "الدرس 2"]
                 
                 st.markdown(f"### 📋 لائحة تلاميذ قسم: **{chosen_cls}** ({cls_level})")
                 
-                # تجهيز قاموس الإرسالات من ورقة Reports
                 submissions_map = {}
                 if not df_reports.empty and 'رقم مسار' in df_reports.columns and 'الدرس' in df_reports.columns:
                     for _, rep_r in df_reports.iterrows():
@@ -461,7 +463,6 @@ def admin_space(df_students, df_reports, df_lessons):
                         
                     table_rows.append(row_dict)
                 
-                # بطاقات الإحصائيات ونسب الإرسال لكل درس داخل القسم
                 st.markdown("#### 📊 نسب الإرسال وتوزيع التلاميذ في هذا القسم:")
                 stat_cols = st.columns(len(tracked_lessons) + 3)
                 
@@ -505,7 +506,6 @@ def admin_space(df_students, df_reports, df_lessons):
                 st.write("")
                 df_class_tracking = pd.DataFrame(table_rows)
                 
-                # خيارات تصفية سريعة داخل القسم
                 status_filter = st.radio(
                     "تصفية تلاميذ القسم:",
                     [
@@ -787,7 +787,8 @@ def admin_space(df_students, df_reports, df_lessons):
 
     with tab4:
         st.markdown("<div class='section-title'>⚙️ إعدادات الصيانة والأمان</div>", unsafe_allow_html=True)
-        st.info("تمت إضافة تبويب تتبع التلاميذ حسب القسم لعرض حالة إرسال الدروس المفعّلة (نعم/لا) ونسب الإرسال لكل درس.")
+        loaded_keys = get_all_api_keys()
+        st.success(f"🔑 عدد مفاتيح Gemini API المفعّلة للتبديل التلقائي: **{len(loaded_keys)}** مفاتيح (يدعم الموديلين `gemini-3.8-flash` و `gemini-2.5-flash` تلقائياً).")
 
 # --- واجهة التلميذ ---
 def student_space(df_students, df_reports, df_lessons):
@@ -1046,30 +1047,40 @@ def student_space(df_students, df_reports, df_lessons):
                                            النسبة النهائية: X%
                                         """
                                         
-                                        model = genai.GenerativeModel("gemini-2.5-flash")
-                                        content_payload = [prompt_instructions] + optimized_images
+                                        api_keys_list = get_all_api_keys()
+                                        models_to_try = ["gemini-3.8-flash", "gemini-2.5-flash"]
                                         
                                         response_success = False
                                         report_text = ""
+                                        last_error_msg = ""
                                         
-                                        for retry_attempt in range(3):
-                                            try:
-                                                res = model.generate_content(
-                                                    content_payload,
-                                                    request_options={"timeout": 120}
-                                                )
-                                                report_text = res.text
-                                                response_success = True
+                                        for current_key in api_keys_list:
+                                            genai.configure(api_key=current_key)
+                                            for model_name in models_to_try:
+                                                try:
+                                                    model = genai.GenerativeModel(model_name)
+                                                    content_payload = [prompt_instructions] + optimized_images
+                                                    res = model.generate_content(
+                                                        content_payload,
+                                                        request_options={"timeout": 120}
+                                                    )
+                                                    report_text = res.text
+                                                    response_success = True
+                                                    break
+                                                except Exception as api_err:
+                                                    err_str = str(api_err)
+                                                    last_error_msg = err_str
+                                                    if "no longer available" in err_str or "not found" in err_str or "404" in err_str:
+                                                        continue
+                                                    elif any(code in err_str for code in ["429", "ResourceExhausted", "quota"]):
+                                                        break
+                                                    else:
+                                                        time.sleep(3)
+                                            if response_success:
                                                 break
-                                            except Exception as api_err:
-                                                if any(err_code in str(api_err) for err_code in ["429", "504", "ResourceExhausted", "DeadlineExceeded"]):
-                                                    st.warning(f"⚠️ الخادم مشغول، جاري إعادة المحاولة ({retry_attempt + 1}/3)...")
-                                                    time.sleep(10)
-                                                else:
-                                                    raise api_err
                                         
                                         if not response_success:
-                                            st.error("🚨 خادم الفحص السحابي ممتلئ أو استغرق وقتاً طويلاً. يرجى المحاولة بعد قليل.")
+                                            st.error(f"🚨 تعذر إتمام التحليل بجميع المفاتيح المتوفرة. آخر خطأ: {last_error_msg}")
                                             st.stop()
                                             
                                         calculated_percentage = extract_percentage_from_report(report_text)
