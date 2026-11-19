@@ -214,10 +214,28 @@ def extract_percentage_from_report(report_str):
 def is_cheating_row(row):
     rep = str(row.get('التقرير', ''))
     col_h = str(row.get('بصمة_الخط', '')).strip()
+    if "حالة غش" in rep or "عدم تطابق الهوية" in rep:
+        return True
     pct = extract_percentage_from_report(rep) if rep else col_h
-    if pct == "0%" or col_h == "0%" or "حالة غش" in rep or "عدم تطابق الهوية" in rep:
+    if pct == "0%" and (col_h == "0%" or col_h == ""):
         return True
     return False
+
+def get_effective_percentage(row):
+    rep = str(row.get('التقرير', ''))
+    col_h = str(row.get('بصمة_الخط', '')).strip()
+    if is_cheating_row(row):
+        return "0%"
+    pct = extract_percentage_from_report(rep)
+    if pct != "0%":
+        return pct
+    if "%" in col_h and col_h != "0%":
+        return col_h
+    if col_h and col_h not in ["0", "0%", "None", "nan"]:
+        clean_h = col_h.replace(",", ".").strip()
+        if re.match(r"^\d+(?:\.\d+)?$", clean_h):
+            return f"{clean_h}%"
+    return "0%"
 
 def normalize_reports_df(df):
     df.columns = df.columns.str.strip()
@@ -415,10 +433,8 @@ def admin_space(df_students, df_reports, df_lessons):
                     for _, rep_r in df_reports.iterrows():
                         m_key = str(rep_r.get('رقم مسار', '')).strip().upper()
                         l_key = str(rep_r.get('الدرس', '')).strip()
-                        rep_txt = str(rep_r.get('التقرير', ''))
-                        col_h = str(rep_r.get('بصمة_الخط', '')).strip()
-                        pct_val = extract_percentage_from_report(rep_txt) if rep_txt else (col_h if "%" in col_h else "0%")
                         cheat_flag = is_cheating_row(rep_r)
+                        pct_val = get_effective_percentage(rep_r)
                         submissions_map[(m_key, l_key)] = (pct_val, cheat_flag)
                 
                 total_students_cls = len(df_cls_students)
@@ -864,18 +880,15 @@ def student_space(df_students, df_reports, df_lessons):
         
         lesson_percentages = {}
         lesson_full_reports = {}
+        lesson_cheating_flags = {}
         if not student_all_submissions.empty:
             for _, row in student_all_submissions.iterrows():
                 l_clean = str(row['الدرس_نظيف'])
                 rep_content = str(row.get('التقرير', ''))
                 lesson_full_reports[l_clean] = rep_content
-                
-                extracted_from_rep = extract_percentage_from_report(rep_content)
-                if extracted_from_rep != "0%":
-                    lesson_percentages[l_clean] = extracted_from_rep
-                else:
-                    col_h_val = str(row.get('بصمة_الخط', '')).strip()
-                    lesson_percentages[l_clean] = col_h_val if "%" in col_h_val else "0%"
+                is_ch = is_cheating_row(row)
+                lesson_cheating_flags[l_clean] = is_ch
+                lesson_percentages[l_clean] = "0%" if is_ch else get_effective_percentage(row)
         
         st.markdown("<div class='section-title'>📊 وضعيتك الحالية في السجل الرقمي:</div>", unsafe_allow_html=True)
         
@@ -886,7 +899,7 @@ def student_space(df_students, df_reports, df_lessons):
             for l_sub in lesson_names_12:
                 if l_sub in submitted_lessons:
                     pct = lesson_percentages.get(l_sub, "0%")
-                    if pct == "0%":
+                    if lesson_cheating_flags.get(l_sub, False):
                         status_text += f"🚨 تم تدقيق <b>{l_sub}</b> وتم رصد <b>مخالفة/حالة غش في الرقم التسلسلي</b> (النسبة: <span style='color:white; background:#dc2626; padding:2px 8px; border-radius:4px;'><b>0%</b></span>)<br>"
                     else:
                         status_text += f"✅ نسبة تدوينك وإنجازك لـ <b>{l_sub}</b> هي: <span style='color:#ffffff; background:#1e3a8a; padding:2px 10px; border-radius:5px;'><b>{pct}</b></span><br>"
@@ -914,7 +927,7 @@ def student_space(df_students, df_reports, df_lessons):
                 
                 if l_name in submitted_lessons:
                     current_p = lesson_percentages.get(l_name, "0%")
-                    if current_p == "0%":
+                    if lesson_cheating_flags.get(l_name, False):
                         st.error(f"🚨 **تنبيه نظام التدقيق والنزاهة الرقمية:**")
                         st.markdown(f"<div style='background-color:#fee2e2; border-right:6px solid #dc2626; padding:15px; border-radius:8px; color:#991b1b; font-weight:bold;'>⚠️ تم رصد حالة غش / عدم تطابق الرقم التسلسلي في الصفحات. تجد تفاصيل التحليل الكامل وملاحظة المخالفة في الفقرة الأخيرة أسفله.</div>", unsafe_allow_html=True)
                         st.markdown(f"### 📋 تفاصيل التقرير الكامل وملاحظة المخالفة المحفوظة إدارياً:")
