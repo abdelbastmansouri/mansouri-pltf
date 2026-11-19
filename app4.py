@@ -1,5 +1,6 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from PIL import Image
 import pandas as pd
 import plotly.express as px
@@ -183,14 +184,14 @@ def calculate_image_hash(file_bytes):
 def optimize_image_for_api(uploaded_file):
     try:
         img = Image.open(uploaded_file)
-        max_size = 1300
+        max_size = 900
         if img.width > max_size or img.height > max_size:
             img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
         
         buffer = io.BytesIO()
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
-        img.save(buffer, format="JPEG", quality=82)
+        img.save(buffer, format="JPEG", quality=75)
         buffer.seek(0)
         return Image.open(buffer)
     except:
@@ -788,7 +789,7 @@ def admin_space(df_students, df_reports, df_lessons):
     with tab4:
         st.markdown("<div class='section-title'>⚙️ إعدادات الصيانة والأمان</div>", unsafe_allow_html=True)
         loaded_keys = get_all_api_keys()
-        st.success(f"🔑 عدد مفاتيح Gemini API المفعّلة للتبديل التلقائي: **{len(loaded_keys)}** مفاتيح (يدعم الموديلين `gemini-3.8-flash` و `gemini-2.5-flash` تلقائياً).")
+        st.success(f"🔑 عدد مفاتيح Gemini API المفعّلة للتبديل التلقائي (حزمة google-genai الحديثة): **{len(loaded_keys)}** مفاتيح.")
 
 # --- واجهة التلميذ ---
 def student_space(df_students, df_reports, df_lessons):
@@ -949,7 +950,7 @@ def student_space(df_students, df_reports, df_lessons):
                             if len(up_files) < 8:
                                 st.error(f"⚠️ **خطأ في معايير قبول الدفتر:** لقد قمت برفع ({len(up_files)}) صور فقط! ميثاق المادة يشترط رفع **8 صور على الأقل** للدرس.")
                             else:
-                                with st.spinner("🔄 جاري تدقيق تدوين الدرس والتمارين والتحقق من الرقم التسلسلي على الصفحات..."):
+                                with st.spinner("🔄 جاري ضغط الصور ومعالجة التدقيق السحابي..."):
                                     current_hashes = []
                                     optimized_images = []
                                     
@@ -1048,39 +1049,40 @@ def student_space(df_students, df_reports, df_lessons):
                                         """
                                         
                                         api_keys_list = get_all_api_keys()
-                                        models_to_try = ["gemini-3.8-flash", "gemini-2.5-flash"]
+                                        models_to_try = ["gemini-2.5-flash", "gemini-3.8-flash", "gemini-2.0-flash", "gemini-flash-latest"]
                                         
                                         response_success = False
                                         report_text = ""
-                                        last_error_msg = ""
+                                        error_log = []
                                         
-                                        for current_key in api_keys_list:
-                                            genai.configure(api_key=current_key)
+                                        for k_idx, current_key in enumerate(api_keys_list, start=1):
+                                            client_ai = genai.Client(api_key=current_key)
                                             for model_name in models_to_try:
                                                 try:
-                                                    model = genai.GenerativeModel(model_name)
                                                     content_payload = [prompt_instructions] + optimized_images
-                                                    res = model.generate_content(
-                                                        content_payload,
-                                                        request_options={"timeout": 120}
+                                                    res = client_ai.models.generate_content(
+                                                        model=model_name,
+                                                        contents=content_payload
                                                     )
                                                     report_text = res.text
                                                     response_success = True
                                                     break
                                                 except Exception as api_err:
                                                     err_str = str(api_err)
-                                                    last_error_msg = err_str
-                                                    if "no longer available" in err_str or "not found" in err_str or "404" in err_str:
+                                                    error_log.append(f"المفتاح {k_idx} ({model_name}): {err_str[:140]}")
+                                                    if any(code in err_str for code in ["404", "not found", "no longer available"]):
                                                         continue
                                                     elif any(code in err_str for code in ["429", "ResourceExhausted", "quota"]):
                                                         break
                                                     else:
-                                                        time.sleep(3)
+                                                        continue
                                             if response_success:
                                                 break
                                         
                                         if not response_success:
-                                            st.error(f"🚨 تعذر إتمام التحليل بجميع المفاتيح المتوفرة. آخر خطأ: {last_error_msg}")
+                                            st.error("🚨 تعذر إتمام التحليل بجميع المفاتيح المتوفرة. سجل التشخيص:")
+                                            for log_line in error_log:
+                                                st.warning(log_line)
                                             st.stop()
                                             
                                         calculated_percentage = extract_percentage_from_report(report_text)
